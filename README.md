@@ -79,21 +79,52 @@ cp .env.example .env            # put one API key in it, or skip for local model
 
 If Maven is not on your `PATH`, point at it with `LAZYPLUGIN_MAVEN=/path/to/mvn`.
 
+## Test it on a real server, right here
+
+A jar that compiles is not a plugin that works. One command downloads Paper,
+installs the plugin and boots a throwaway server on your machine:
+
+```bash
+lazyplugin test --accept-eula
+```
+
+```
+plugin: out/diamond-firework/target/diamond-firework.jar
+  * Paper 1.21 build 130
+  * downloading paper-1.21-130.jar ...
+  * installed diamond-firework.jar into plugins/
+
+starting Paper on port 25565. Join at localhost:25565 (offline mode).
+```
+
+Then open Minecraft, add `localhost` as a server, and go break it. The world is
+flat, spawn protection is off and authentication is disabled, so you can join
+with any client and start testing in seconds.
+
+Running a server means agreeing to the
+[Minecraft EULA](https://aka.ms/MinecraftEULA), so `--accept-eula` is required
+and nothing is accepted on your behalf. You need a JDK 21 or newer.
+
 ## The web interface
 
 ```bash
 lazyplugin serve
 ```
 
-Opens a local page with a model picker, a box to describe the plugin, live build
-progress and a download button. It binds to `127.0.0.1` on purpose: the process
-holds your API keys, so anyone who can reach the port can spend your credits.
+A local page with a model picker, live build progress, a download button, and a
+**Start test server** button that does everything above without leaving the
+browser: it streams the server console so you watch the plugin enable, or throw.
+Day, night and auto themes.
+
+It binds to `127.0.0.1` on purpose: the process holds your API keys and can start
+servers, so anyone who reaches that port can spend your credits.
 
 ## Commands
 
 ```bash
 lazyplugin "a plugin that ..."                 # create
 lazyplugin edit ./my-project "add a cooldown"  # change an existing one
+lazyplugin test --accept-eula                  # boot a Paper server with it
 lazyplugin models                              # what you can use
 lazyplugin models --check                      # what actually answers
 lazyplugin serve                               # web interface

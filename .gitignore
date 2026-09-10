@@ -15,3 +15,7 @@ runs.jsonl
 
 # local run telemetry
 lazyplugin/runs.jsonl
+
+# throwaway test servers
+test-server/
+server/

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>LazyPlugin</title>
 <style>
+  /* Day is the base palette; night redefines only the tokens, so every rule
+     below is written once. An explicit choice wins over the OS setting. */
   :root{
     --paper:#F4EDDF; --paper2:#EFE7D6; --paper3:#E7DDC8; --hairline:#DDD2BC;
     --ink:#2C3E48; --slate:#4A6B7C; --faint:#8CA3B0;
@@ -13,10 +15,23 @@
     --sans:'Segoe UI',Helvetica,Arial,sans-serif;
     --mono:'Cascadia Mono',Consolas,'SF Mono',monospace;
   }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="day"]){
+      --paper:#191E23; --paper2:#20272D; --paper3:#2A333A; --hairline:#374249;
+      --ink:#E9E3D6; --slate:#A6BAC5; --faint:#7A8C97;
+      --cyan:#3FC3D2; --ok:#63B07A; --danger:#D2796B;
+    }
+  }
+  :root[data-theme="night"]{
+    --paper:#191E23; --paper2:#20272D; --paper3:#2A333A; --hairline:#374249;
+    --ink:#E9E3D6; --slate:#A6BAC5; --faint:#7A8C97;
+    --cyan:#3FC3D2; --ok:#63B07A; --danger:#D2796B;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);
+    font-size:14px;line-height:1.5;transition:background .18s ease,color .18s ease}
   .wrap{max-width:860px;margin:0 auto;padding:34px 24px 70px}
-  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+  header{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
     border-bottom:1px solid var(--hairline);padding-bottom:16px;margin-bottom:26px}
   h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spacing:-.01em}
   .tag{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--cyan);
@@ -24,41 +39,56 @@
   header .sp{flex:1}
   header a{color:var(--slate);font-size:12.5px;text-decoration:none;border-bottom:1px solid var(--hairline)}
   header a:hover{color:var(--cyan);border-color:var(--cyan)}
+  .themes{display:flex;border:1px solid var(--hairline);border-radius:999px;overflow:hidden}
+  .themes button{background:transparent;border:none;color:var(--faint);cursor:pointer;
+    font-size:11px;font-weight:600;padding:5px 11px;letter-spacing:.04em}
+  .themes button[aria-pressed="true"]{background:var(--paper3);color:var(--ink)}
   label{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;
     text-transform:uppercase;color:var(--faint);margin:0 0 6px}
-  textarea,select,input{width:100%;font-family:inherit;font-size:14px;color:var(--ink);
-    background:var(--paper2);border:1px solid var(--hairline);border-radius:6px;padding:11px 13px}
+  textarea,select,input[type=text],input[type=number]{width:100%;font-family:inherit;font-size:14px;
+    color:var(--ink);background:var(--paper2);border:1px solid var(--hairline);
+    border-radius:6px;padding:11px 13px}
   textarea{min-height:88px;resize:vertical}
   textarea:focus,select:focus,input:focus{outline:none;border-color:var(--cyan)}
   .row{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}
   .row > div{flex:1;min-width:190px}
-  button{font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+  button.primary{font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
     background:var(--ink);color:var(--paper);border:none;border-radius:2px;padding:13px 26px}
-  button:hover{background:var(--slate)}
-  button:disabled{background:var(--faint);cursor:default}
+  button.primary:hover{background:var(--slate)}
+  button.primary:disabled{background:var(--faint);cursor:default}
+  button.ghost{font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;
+    background:transparent;color:var(--slate);border:1px solid var(--hairline);
+    border-radius:2px;padding:9px 16px}
+  button.ghost:hover{border-color:var(--cyan);color:var(--cyan)}
   .hint{font-size:12px;color:var(--faint);margin-top:7px}
-  .hint code{font-family:var(--mono);font-size:11.5px;background:var(--paper3);padding:1px 5px;border-radius:2px}
+  .hint code{font-family:var(--mono);font-size:11.5px;background:var(--paper3);
+    padding:1px 5px;border-radius:2px}
   .panel{border:1px solid var(--hairline);border-radius:6px;background:var(--paper2);
     padding:18px 20px;margin-top:26px}
   .panel h2{font-family:var(--serif);font-size:16px;margin:0 0 12px;font-weight:600}
-  #log{font-family:var(--mono);font-size:12px;color:var(--slate);white-space:pre-wrap;
-    max-height:260px;overflow-y:auto;margin:0}
-  #log b{color:var(--ink);font-weight:600}
+  pre.log{font-family:var(--mono);font-size:12px;color:var(--slate);white-space:pre-wrap;
+    max-height:260px;overflow-y:auto;margin:0;word-break:break-word}
   .stats{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 0;padding-top:14px;
     border-top:1px solid var(--hairline)}
   .stat .k{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
   .stat .v{font-family:var(--mono);font-size:14px;color:var(--ink)}
-  a.dl{display:inline-block;margin-top:15px;background:var(--cyan);color:#fff;
+  a.dl{display:inline-block;margin-top:15px;background:var(--cyan);color:#08222a;
     text-decoration:none;font-weight:600;padding:11px 22px;border-radius:2px}
   .err{color:var(--danger)}
   details{margin-top:14px}
   summary{cursor:pointer;color:var(--slate);font-size:12.5px}
-  .prov{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--hairline)}
+  .prov{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;
+    border-bottom:1px solid var(--hairline)}
   .prov:last-child{border-bottom:none}
   .dot{width:7px;height:7px;border-radius:999px;flex-shrink:0;background:var(--faint)}
   .dot.on{background:var(--ok)}
   .prov .nm{flex:1}
   .prov .meta{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  .eula{display:flex;align-items:flex-start;gap:9px;margin:4px 0 14px;font-size:13px;color:var(--slate)}
+  .eula input{margin-top:3px}
+  .eula a{color:var(--cyan)}
+  .addr{font-family:var(--mono);font-size:15px;color:var(--ink);background:var(--paper3);
+    display:inline-block;padding:7px 13px;border-radius:2px;margin:2px 0 12px}
   footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--hairline);
     font-size:12px;color:var(--faint)}
   footer a{color:var(--cyan);text-decoration:none}
@@ -70,7 +100,12 @@
     <h1>LazyPlugin</h1>
     <span class="tag">LOCAL</span>
     <span class="sp"></span>
-    <a href="https://lazysteve.io" target="_blank" rel="noopener">no setup? try the hosted version</a>
+    <div class="themes" id="themes">
+      <button data-theme="day" title="Light">Day</button>
+      <button data-theme="night" title="Dark">Night</button>
+      <button data-theme="auto" title="Follow the system">Auto</button>
+    </div>
+    <a href="https://lazysteve.io" target="_blank" rel="noopener">no setup? hosted version</a>
   </header>
 
   <label for="req">What should the plugin do?</label>
@@ -93,14 +128,40 @@
   </div>
 
   <div class="row" style="align-items:center">
-    <div style="flex:0 0 auto"><button id="go">Build the plugin</button></div>
-    <div class="hint" style="margin-top:0">Compiles with Maven on this machine. First run downloads the Paper API.</div>
+    <div style="flex:0 0 auto"><button class="primary" id="go">Build the plugin</button></div>
+    <div class="hint" style="margin-top:0">Compiles with Maven on this machine. The first run downloads the Paper API.</div>
   </div>
 
   <div class="panel" id="runPanel" hidden>
     <h2>Progress</h2>
-    <pre id="log"></pre>
+    <pre class="log" id="log"></pre>
     <div id="result"></div>
+  </div>
+
+  <div class="panel" id="testPanel" hidden>
+    <h2>Try it on a real server</h2>
+    <p class="hint" style="margin-top:0">
+      Downloads Paper, drops the plugin into <code>plugins/</code> and boots it here on
+      your machine. Watch the console for the plugin enabling, or blowing up.
+    </p>
+    <div class="eula">
+      <input type="checkbox" id="eula">
+      <label for="eula" style="text-transform:none;letter-spacing:0;font-size:13px;
+             font-weight:400;color:var(--slate);margin:0">
+        I have read and accept the
+        <a href="https://aka.ms/MinecraftEULA" target="_blank" rel="noopener">Minecraft EULA</a>,
+        which running a server requires.
+      </label>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="primary" id="startSrv" disabled>Start test server</button>
+      <button class="ghost" id="stopSrv" hidden>Stop server</button>
+      <span class="hint" id="javaHint" style="margin-top:0"></span>
+    </div>
+    <div id="srvBox" hidden style="margin-top:16px">
+      <div id="srvAddr"></div>
+      <pre class="log" id="srvLog"></pre>
+    </div>
   </div>
 
   <details id="provDetails">
@@ -109,7 +170,7 @@
       <div id="provs">checking...</div>
       <div class="hint" style="margin-top:12px">
         Any OpenAI-compatible endpoint works. No key? Run a model locally for free:
-        <code>ollama serve</code> then pick an Ollama model above.
+        <code>ollama serve</code>, then pick an Ollama model above.
       </div>
     </div>
   </details>
@@ -117,23 +178,39 @@
   <footer>
     LazyPlugin is open source and free. It is built by
     <a href="https://lazysteve.io" target="_blank" rel="noopener">LazySteve</a>,
-    which does the same thing for Minecraft <em>builds</em> - and runs this without
-    any install.
+    which does the same thing for Minecraft <em>builds</em>, and runs this with
+    nothing to install.
   </footer>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-let MODELS = [], PROVS = {};
+let MODELS = [], PROVS = {}, LAST_JOB = null, TEST_ID = null;
 
+/* --- theme ------------------------------------------------------------- */
+function applyTheme(t){
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t);
+  for (const b of $('themes').children)
+    b.setAttribute('aria-pressed', String(b.dataset.theme === t));
+  try { localStorage.setItem('lp_theme', t); } catch (e) {}
+}
+$('themes').addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (b) applyTheme(b.dataset.theme);
+});
+let saved = 'auto';
+try { saved = localStorage.getItem('lp_theme') || 'auto'; } catch (e) {}
+applyTheme(saved);
+
+/* --- models ------------------------------------------------------------ */
 async function loadModels(){
   const data = await (await fetch('/api/models')).json();
   MODELS = data.models;
   PROVS = Object.fromEntries(data.providers.map(p => [p.id, p]));
   const sel = $('model');
   sel.innerHTML = '';
-  // Ready-to-use providers first, so the first thing you see is something
-  // that actually works on this machine.
+  // Ready-to-use providers first, so the first thing you see works here.
   const groups = {};
   for (const m of MODELS) (groups[m.provider] ||= []).push(m);
   const order = Object.keys(groups).sort((a,b) =>
@@ -184,16 +261,18 @@ async function loadProviders(){
 }
 $('provDetails').addEventListener('toggle', function(){
   if (this.open && $('provs').textContent === 'checking...') loadProviders();
-}, { once:false });
+});
 
 function esc(s){ return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 
+/* --- build ------------------------------------------------------------- */
 async function build(){
   const request = $('req').value.trim();
   if (!request){ $('req').focus(); return; }
   const [provider, ...rest] = $('model').value.split('/');
   $('go').disabled = true; $('go').textContent = 'Building...';
   $('runPanel').hidden = false; $('log').textContent = ''; $('result').innerHTML = '';
+  $('testPanel').hidden = true;
 
   const r = await fetch('/api/build', {
     method:'POST', headers:{'Content-Type':'application/json'},
@@ -220,7 +299,7 @@ async function poll(id){
 }
 
 function render(res, id){
-  const cost = res.cost_usd === null || res.cost_usd === undefined
+  const cost = (res.cost_usd === null || res.cost_usd === undefined)
       ? 'unpriced' : '$' + res.cost_usd.toFixed(4);
   const stat = (k, v) => `<div class="stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
   let html = '<div class="stats">' +
@@ -230,15 +309,82 @@ function render(res, id){
     stat('fix rounds', res.attempts) + '</div>';
   if (res.ok){
     html += '<a class="dl" href="/api/download/' + id + '">Download ' + esc(res.jar) + '</a>';
-    html += '<div class="hint">Drop it in your server <code>plugins/</code> folder and restart. ' +
-            'Sources are in <code>' + esc(res.project_dir) + '</code>.</div>';
+    html += '<div class="hint">Sources are in <code>' + esc(res.project_dir) + '</code>.</div>';
+    LAST_JOB = id;
+    $('testPanel').hidden = false;
+    checkJava();
   } else {
     html += '<p class="err">The plugin did not compile after ' + res.attempts + ' attempts.</p>' +
-            '<details><summary>compiler output</summary><pre id="log">' +
+            '<details><summary>compiler output</summary><pre class="log">' +
             esc(res.compile_log_tail) + '</pre></details>' +
-            '<div class="hint">A stronger model usually fixes this - try Claude Sonnet, GPT-4o or DeepSeek V4 Pro.</div>';
+            '<div class="hint">A stronger model usually fixes this: try Claude Sonnet, GPT-4o or DeepSeek V4 Pro.</div>';
   }
   $('result').innerHTML = html;
+}
+
+/* --- local test server -------------------------------------------------- */
+async function checkJava(){
+  try{
+    const j = await (await fetch('/api/java')).json();
+    if (!j.version){
+      $('javaHint').innerHTML = 'No Java found. Paper needs a JDK 21+.';
+      $('eula').disabled = true;
+    } else if (!j.ok){
+      $('javaHint').textContent = 'Java ' + j.version + ' found; Paper wants 21 or newer.';
+    } else {
+      $('javaHint').textContent = 'Java ' + j.version + ' ready.';
+    }
+  }catch(e){}
+}
+
+$('eula').addEventListener('change', function(){ $('startSrv').disabled = !this.checked; });
+
+$('startSrv').addEventListener('click', async () => {
+  $('startSrv').disabled = true; $('startSrv').textContent = 'Starting...';
+  $('srvBox').hidden = false; $('srvLog').textContent = '';
+  const r = await fetch('/api/test', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ job_id: LAST_JOB, version: $('version').value, accept_eula: true })
+  });
+  const data = await r.json();
+  if (!r.ok){
+    $('srvLog').innerHTML = '<span class="err">' + esc(data.detail) + '</span>';
+    $('startSrv').disabled = false; $('startSrv').textContent = 'Start test server';
+    return;
+  }
+  TEST_ID = data.test_id;
+  $('stopSrv').hidden = false;
+  $('srvAddr').innerHTML = 'Join at <span class="addr">localhost:' + data.port + '</span>' +
+    '<div class="hint" style="margin-top:0">Offline mode, so any client can connect. ' +
+    'First boot takes a minute while Paper downloads.</div>';
+  pollServer();
+});
+
+$('stopSrv').addEventListener('click', async () => {
+  if (!TEST_ID) return;
+  $('stopSrv').textContent = 'Stopping...';
+  await fetch('/api/test/' + TEST_ID + '/stop', { method:'POST' });
+});
+
+async function pollServer(){
+  let seen = 0;
+  const tick = async () => {
+    const t = await (await fetch('/api/test/' + TEST_ID)).json();
+    if (t.log.length !== seen){
+      $('srvLog').textContent = t.log.join('\n');
+      seen = t.log.length;
+      $('srvLog').scrollTop = 1e6;
+    }
+    if (t.status === 'starting' || t.status === 'running'){
+      $('startSrv').textContent = t.status === 'running' ? 'Server running' : 'Starting...';
+      setTimeout(tick, 1200);
+      return;
+    }
+    $('startSrv').disabled = false; $('startSrv').textContent = 'Start test server';
+    $('stopSrv').hidden = true; $('stopSrv').textContent = 'Stop server';
+    if (t.error) $('srvLog').innerHTML += '\n<span class="err">' + esc(t.error) + '</span>';
+  };
+  tick();
 }
 
 $('go').addEventListener('click', build);

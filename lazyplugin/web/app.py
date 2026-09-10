@@ -1,12 +1,13 @@
 """The local web interface: `lazyplugin serve`.
 
-Deliberately small. Builds run in a background thread and the page polls for
-progress, which survives a laptop sleeping mid-compile far better than a long
-streaming connection would, and keeps the whole server under 150 lines.
+Deliberately small. Builds and test servers run in background threads and the
+page polls for progress, which survives a laptop sleeping mid-compile far
+better than a long streaming connection would.
 
-Binds to 127.0.0.1 by default ON PURPOSE: the process holds your API keys, so
-anyone who can reach this port can spend your tokens. Pass --host 0.0.0.0 only
-on a network you trust.
+Binds to 127.0.0.1 by default ON PURPOSE: the process holds your API keys and
+can start a Minecraft server, so anyone who reaches this port can spend your
+credits and run a process on your machine. Pass --host 0.0.0.0 only on a
+network you trust.
 """
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import uuid
 from dataclasses import dataclass, field
 
 JOBS: dict[str, "Job"] = {}
+TESTS: dict[str, "TestRun"] = {}
 
 
 @dataclass
@@ -26,6 +28,16 @@ class Job:
     result: dict | None = None
     error: str | None = None
     jar_path: str | None = None
+
+
+@dataclass
+class TestRun:
+    id: str
+    status: str = "starting"         # starting | running | stopped | error
+    log: list[str] = field(default_factory=list)
+    port: int = 25565
+    error: str | None = None
+    proc: object | None = None
 
 
 def _run(job: Job, payload: dict) -> None:
@@ -58,6 +70,27 @@ def _run(job: Job, payload: dict) -> None:
     except Exception as exc:                                   # noqa: BLE001
         job.error = f"{type(exc).__name__}: {exc}"
         job.status = "error"
+
+
+def _run_server(test: TestRun, jar: str, version: str, server_dir: str) -> None:
+    from .. import testserver as ts
+
+    def line(msg: str):
+        test.log.append(msg)
+        # Paper announces this once the world is loaded and plugins are enabled.
+        if "Done (" in msg and test.status == "starting":
+            test.status = "running"
+        if len(test.log) > 600:                # a long session should not eat RAM
+            del test.log[:200]
+
+    try:
+        server_jar = ts.prepare(server_dir, version=version, plugin_jar=jar,
+                                accept_eula=True, port=test.port, on_event=line)
+        test.proc = ts.start(server_dir, server_jar, on_line=line)
+        test.status = "stopped"
+    except Exception as exc:                                   # noqa: BLE001
+        test.error = f"{type(exc).__name__}: {exc}"
+        test.status = "error"
 
 
 def create_app():
@@ -118,6 +151,55 @@ def create_app():
         return FileResponse(job.jar_path, filename=os.path.basename(job.jar_path),
                             media_type="application/java-archive")
 
+    # --- local test server --------------------------------------------------
+
+    @app.get("/api/java")
+    def java():
+        """So the page can say what is missing before you click anything."""
+        from ..testserver import java_version
+        v = java_version()
+        return {"version": v, "ok": bool(v and v >= 21)}
+
+    @app.post("/api/test")
+    def start_test(payload: dict):
+        job = JOBS.get(payload.get("job_id") or "")
+        if not job or not job.jar_path:
+            raise HTTPException(404, "build a plugin first")
+        if not payload.get("accept_eula"):
+            # Agreeing to the Minecraft EULA has to be the user act, not ours.
+            raise HTTPException(400, "the Minecraft EULA must be accepted first")
+        if any(t.status in ("starting", "running") for t in TESTS.values()):
+            raise HTTPException(409, "a test server is already running")
+
+        test = TestRun(id=uuid.uuid4().hex[:8],
+                       port=int(payload.get("port") or 25565))
+        TESTS[test.id] = test
+        threading.Thread(
+            target=_run_server,
+            args=(test, job.jar_path, payload.get("version") or "1.21",
+                  payload.get("dir") or "./test-server"),
+            daemon=True).start()
+        return {"test_id": test.id, "port": test.port}
+
+    @app.get("/api/test/{test_id}")
+    def test_status(test_id: str):
+        test = TESTS.get(test_id)
+        if not test:
+            raise HTTPException(404, "unknown test server")
+        return {"status": test.status, "log": test.log,
+                "port": test.port, "error": test.error}
+
+    @app.post("/api/test/{test_id}/stop")
+    def stop_test(test_id: str):
+        from ..testserver import stop
+        test = TESTS.get(test_id)
+        if not test:
+            raise HTTPException(404, "unknown test server")
+        if test.proc is not None:
+            stop(test.proc)
+        test.status = "stopped"
+        return {"status": test.status}
+
     return app
 
 
@@ -134,7 +216,7 @@ def serve(host: str = "127.0.0.1", port: int = 8321, open_browser: bool = True) 
     print(f"LazyPlugin is running at {url}")
     if host not in ("127.0.0.1", "localhost"):
         print("  WARNING: bound to a public interface. Anyone who can reach this\n"
-              "  port can spend your API credits.")
+              "  port can spend your API credits and start servers on this machine.")
     if open_browser:
         import webbrowser
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
