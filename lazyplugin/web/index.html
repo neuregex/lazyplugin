@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LazyPlugin</title>
+<style>
+  :root{
+    --paper:#F4EDDF; --paper2:#EFE7D6; --paper3:#E7DDC8; --hairline:#DDD2BC;
+    --ink:#2C3E48; --slate:#4A6B7C; --faint:#8CA3B0;
+    --cyan:#28A7B5; --ok:#4B8F5E; --danger:#B4574B;
+    --serif:Georgia,'Iowan Old Style',serif;
+    --sans:'Segoe UI',Helvetica,Arial,sans-serif;
+    --mono:'Cascadia Mono',Consolas,'SF Mono',monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5}
+  .wrap{max-width:860px;margin:0 auto;padding:34px 24px 70px}
+  header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;
+    border-bottom:1px solid var(--hairline);padding-bottom:16px;margin-bottom:26px}
+  h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .tag{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--cyan);
+    border:1px solid var(--cyan);border-radius:2px;padding:2px 6px}
+  header .sp{flex:1}
+  header a{color:var(--slate);font-size:12.5px;text-decoration:none;border-bottom:1px solid var(--hairline)}
+  header a:hover{color:var(--cyan);border-color:var(--cyan)}
+  label{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;
+    text-transform:uppercase;color:var(--faint);margin:0 0 6px}
+  textarea,select,input{width:100%;font-family:inherit;font-size:14px;color:var(--ink);
+    background:var(--paper2);border:1px solid var(--hairline);border-radius:6px;padding:11px 13px}
+  textarea{min-height:88px;resize:vertical}
+  textarea:focus,select:focus,input:focus{outline:none;border-color:var(--cyan)}
+  .row{display:flex;gap:14px;flex-wrap:wrap;margin-top:16px}
+  .row > div{flex:1;min-width:190px}
+  button{font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;
+    background:var(--ink);color:var(--paper);border:none;border-radius:2px;padding:13px 26px}
+  button:hover{background:var(--slate)}
+  button:disabled{background:var(--faint);cursor:default}
+  .hint{font-size:12px;color:var(--faint);margin-top:7px}
+  .hint code{font-family:var(--mono);font-size:11.5px;background:var(--paper3);padding:1px 5px;border-radius:2px}
+  .panel{border:1px solid var(--hairline);border-radius:6px;background:var(--paper2);
+    padding:18px 20px;margin-top:26px}
+  .panel h2{font-family:var(--serif);font-size:16px;margin:0 0 12px;font-weight:600}
+  #log{font-family:var(--mono);font-size:12px;color:var(--slate);white-space:pre-wrap;
+    max-height:260px;overflow-y:auto;margin:0}
+  #log b{color:var(--ink);font-weight:600}
+  .stats{display:flex;gap:22px;flex-wrap:wrap;margin:14px 0 0;padding-top:14px;
+    border-top:1px solid var(--hairline)}
+  .stat .k{font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint)}
+  .stat .v{font-family:var(--mono);font-size:14px;color:var(--ink)}
+  a.dl{display:inline-block;margin-top:15px;background:var(--cyan);color:#fff;
+    text-decoration:none;font-weight:600;padding:11px 22px;border-radius:2px}
+  .err{color:var(--danger)}
+  details{margin-top:14px}
+  summary{cursor:pointer;color:var(--slate);font-size:12.5px}
+  .prov{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:13px;border-bottom:1px solid var(--hairline)}
+  .prov:last-child{border-bottom:none}
+  .dot{width:7px;height:7px;border-radius:999px;flex-shrink:0;background:var(--faint)}
+  .dot.on{background:var(--ok)}
+  .prov .nm{flex:1}
+  .prov .meta{font-family:var(--mono);font-size:11px;color:var(--faint)}
+  footer{margin-top:34px;padding-top:16px;border-top:1px solid var(--hairline);
+    font-size:12px;color:var(--faint)}
+  footer a{color:var(--cyan);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>LazyPlugin</h1>
+    <span class="tag">LOCAL</span>
+    <span class="sp"></span>
+    <a href="https://lazysteve.io" target="_blank" rel="noopener">no setup? try the hosted version</a>
+  </header>
+
+  <label for="req">What should the plugin do?</label>
+  <textarea id="req" placeholder="every player who mines diamond ore gets a firework and a message in chat"></textarea>
+
+  <div class="row">
+    <div>
+      <label for="model">Model</label>
+      <select id="model"></select>
+      <div class="hint" id="modelHint"></div>
+    </div>
+    <div>
+      <label for="version">Minecraft version</label>
+      <select id="version">
+        <option value="1.21" selected>1.21</option>
+        <option value="1.20">1.20</option>
+      </select>
+      <div class="hint">Paper / Spigot compatible</div>
+    </div>
+  </div>
+
+  <div class="row" style="align-items:center">
+    <div style="flex:0 0 auto"><button id="go">Build the plugin</button></div>
+    <div class="hint" style="margin-top:0">Compiles with Maven on this machine. First run downloads the Paper API.</div>
+  </div>
+
+  <div class="panel" id="runPanel" hidden>
+    <h2>Progress</h2>
+    <pre id="log"></pre>
+    <div id="result"></div>
+  </div>
+
+  <details id="provDetails">
+    <summary>Which providers are ready on this machine?</summary>
+    <div class="panel" style="margin-top:12px">
+      <div id="provs">checking...</div>
+      <div class="hint" style="margin-top:12px">
+        Any OpenAI-compatible endpoint works. No key? Run a model locally for free:
+        <code>ollama serve</code> then pick an Ollama model above.
+      </div>
+    </div>
+  </details>
+
+  <footer>
+    LazyPlugin is open source and free. It is built by
+    <a href="https://lazysteve.io" target="_blank" rel="noopener">LazySteve</a>,
+    which does the same thing for Minecraft <em>builds</em> - and runs this without
+    any install.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let MODELS = [], PROVS = {};
+
+async function loadModels(){
+  const data = await (await fetch('/api/models')).json();
+  MODELS = data.models;
+  PROVS = Object.fromEntries(data.providers.map(p => [p.id, p]));
+  const sel = $('model');
+  sel.innerHTML = '';
+  // Ready-to-use providers first, so the first thing you see is something
+  // that actually works on this machine.
+  const groups = {};
+  for (const m of MODELS) (groups[m.provider] ||= []).push(m);
+  const order = Object.keys(groups).sort((a,b) =>
+      (PROVS[b].configured - PROVS[a].configured) || a.localeCompare(b));
+  for (const pid of order){
+    const p = PROVS[pid];
+    const og = document.createElement('optgroup');
+    og.label = p.label + (p.configured ? '' : '  (no key set)');
+    for (const m of groups[pid]){
+      const o = document.createElement('option');
+      o.value = pid + '/' + m.id;
+      o.textContent = m.label;
+      o.dataset.notes = m.notes || '';
+      o.dataset.ready = p.configured ? '1' : '';
+      o.dataset.env = p.env_key || '';
+      o.dataset.docs = p.docs || '';
+      og.appendChild(o);
+    }
+    sel.appendChild(og);
+  }
+  const firstReady = [...sel.options].find(o => o.dataset.ready);
+  if (firstReady) sel.value = firstReady.value;
+  hint();
+}
+
+function hint(){
+  const o = $('model').selectedOptions[0];
+  if (!o) return;
+  if (!o.dataset.ready){
+    $('modelHint').innerHTML = 'Needs <code>' + o.dataset.env +
+      '</code> in your environment. <a href="' + o.dataset.docs +
+      '" target="_blank" rel="noopener">Get a key</a>';
+  } else {
+    $('modelHint').textContent = o.dataset.notes || 'Ready';
+  }
+}
+
+async function loadProviders(){
+  try{
+    const { rows } = await (await fetch('/api/check')).json();
+    $('provs').innerHTML = rows.map(r => `
+      <div class="prov">
+        <span class="dot ${r.status.startsWith('ok') ? 'on' : ''}"></span>
+        <span class="nm">${r.label}</span>
+        <span class="meta">${r.status}${r.models ? ' - ' + r.models + ' models' : ''}</span>
+      </div>`).join('');
+  }catch(e){ $('provs').textContent = 'could not probe providers'; }
+}
+$('provDetails').addEventListener('toggle', function(){
+  if (this.open && $('provs').textContent === 'checking...') loadProviders();
+}, { once:false });
+
+function esc(s){ return String(s).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+
+async function build(){
+  const request = $('req').value.trim();
+  if (!request){ $('req').focus(); return; }
+  const [provider, ...rest] = $('model').value.split('/');
+  $('go').disabled = true; $('go').textContent = 'Building...';
+  $('runPanel').hidden = false; $('log').textContent = ''; $('result').innerHTML = '';
+
+  const r = await fetch('/api/build', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ request, provider, model: rest.join('/'), version: $('version').value })
+  });
+  if (!r.ok){ finish(); $('result').innerHTML = '<p class="err">' + esc((await r.json()).detail) + '</p>'; return; }
+  poll((await r.json()).job_id);
+}
+
+function finish(){ $('go').disabled = false; $('go').textContent = 'Build the plugin'; }
+
+async function poll(id){
+  let seen = 0;
+  const tick = async () => {
+    const j = await (await fetch('/api/job/' + id)).json();
+    for (const e of j.events.slice(seen)) $('log').textContent += e + '\n';
+    if (j.events.length !== seen){ seen = j.events.length; $('log').scrollTop = 1e6; }
+    if (j.status === 'running'){ setTimeout(tick, 900); return; }
+    finish();
+    if (j.status === 'error'){ $('result').innerHTML = '<p class="err">' + esc(j.error) + '</p>'; return; }
+    render(j.result, id);
+  };
+  tick();
+}
+
+function render(res, id){
+  const cost = res.cost_usd === null || res.cost_usd === undefined
+      ? 'unpriced' : '$' + res.cost_usd.toFixed(4);
+  const stat = (k, v) => `<div class="stat"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>`;
+  let html = '<div class="stats">' +
+    stat('files', res.files.length) + stat('llm calls', res.calls) +
+    stat('tokens', res.prompt_tokens + ' / ' + res.completion_tokens) +
+    stat('cost', cost) + stat('time', res.duration_s + 's') +
+    stat('fix rounds', res.attempts) + '</div>';
+  if (res.ok){
+    html += '<a class="dl" href="/api/download/' + id + '">Download ' + esc(res.jar) + '</a>';
+    html += '<div class="hint">Drop it in your server <code>plugins/</code> folder and restart. ' +
+            'Sources are in <code>' + esc(res.project_dir) + '</code>.</div>';
+  } else {
+    html += '<p class="err">The plugin did not compile after ' + res.attempts + ' attempts.</p>' +
+            '<details><summary>compiler output</summary><pre id="log">' +
+            esc(res.compile_log_tail) + '</pre></details>' +
+            '<div class="hint">A stronger model usually fixes this - try Claude Sonnet, GPT-4o or DeepSeek V4 Pro.</div>';
+  }
+  $('result').innerHTML = html;
+}
+
+$('go').addEventListener('click', build);
+$('model').addEventListener('change', hint);
+$('req').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) build(); });
+loadModels();
+</script>
+</body>
+</html>

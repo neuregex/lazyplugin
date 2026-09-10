@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lazyplugin"
+version = "0.1.0"
+description = "Describe a Minecraft server plugin in plain English, get a compiled Paper jar. Bring your own model."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = ["minecraft", "paper", "spigot", "plugin", "llm", "codegen", "ollama"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Software Development :: Code Generators",
+  "Topic :: Games/Entertainment",
+]
+dependencies = ["openai>=1.30"]
+
+[project.optional-dependencies]
+web = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.scripts]
+lazyplugin = "lazyplugin.cli:main"
+
+[project.urls]
+Homepage = "https://lazysteve.io"
+Source = "https://github.com/neuregex/lazyplugin"
+
+[tool.setuptools.packages.find]
+include = ["lazyplugin*"]
+
+[tool.setuptools.package-data]
+lazyplugin = ["corpus.json", "web/*.html"]

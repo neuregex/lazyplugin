@@ -1,0 +1,817 @@
+{
+ "cards": [
+  {
+   "id": "cmd-plugin-yml-canonical",
+   "category": "commands",
+   "title": "Canonical plugin.yml for a Paper 1.21 plugin (name/main/version/api-version/commands/permissions)",
+   "tags": [
+    "plugin.yml",
+    "api-version",
+    "manifest",
+    "project skeleton",
+    "esqueleto de plugin",
+    "archivo plugin.yml",
+    "configuracion del plugin",
+    "comandos en plugin.yml",
+    "permisos en plugin.yml",
+    "paper 1.21"
+   ],
+   "notes": "plugin.yml goes in src/main/resources (root of the final jar). CLASSIC MISTAKES: (1) missing api-version → Paper logs a 'legacy plugin' warning and enables legacy material compat — always set api-version: '1.21' (quote it so YAML doesn't parse it as the float 1.21); (2) main must be the exact fully-qualified class name of the JavaPlugin subclass or the plugin fails to load; (3) every command you register in code MUST be declared under commands: here — otherwise getCommand(\"x\") returns null and setExecutor throws NPE on enable; (4) in usage:, the literal token /<command> is auto-replaced by the command name; usage is what players see when onCommand returns false. The command-level 'permission:' key blocks the command BEFORE your executor runs (Bukkit sends its generic no-permission message) — for a custom denial message do the check in code instead.",
+   "code": "name: ExamplePlugin\nversion: 1.0.0\nmain: com.example.exampleplugin.ExamplePlugin\napi-version: '1.21'\ndescription: Example Paper plugin skeleton\nauthor: YourName\n\ncommands:\n  hello:\n    description: Greets the sender\n    usage: /<command>\n    aliases: [hi]\n  greet:\n    description: Greets another player\n    usage: /<command> <player>\n    permission: exampleplugin.greet\n\npermissions:\n  exampleplugin.greet:\n    description: Allows /greet\n    default: true\n  exampleplugin.admin:\n    description: Admin commands\n    default: op"
+  },
+  {
+   "id": "cmd-main-class-skeleton",
+   "category": "commands",
+   "title": "Canonical main-class skeleton: JavaPlugin with onEnable/onDisable, logger and command registration",
+   "tags": [
+    "JavaPlugin",
+    "onEnable",
+    "onDisable",
+    "main class",
+    "clase principal",
+    "esqueleto",
+    "skeleton",
+    "getLogger",
+    "registrar comando",
+    "register command",
+    "paper 1.21"
+   ],
+   "notes": "Class must be public, extend JavaPlugin, and match 'main:' in plugin.yml. getCommand() only finds commands DECLARED in plugin.yml — if the entry is missing it returns null, hence the requireNonNull with a clear message (fail fast at enable, not with a bare NPE). Register listeners in onEnable via getServer().getPluginManager().registerEvents(listener, this). Use getLogger() (already prefixed with the plugin name), NOT System.out. Never do heavy blocking work directly in onEnable — it blocks server startup. The lambda works because CommandExecutor is a functional interface; for real plugins prefer a separate CommandExecutor class.",
+   "code": "package com.example.exampleplugin;\n\nimport java.util.Objects;\nimport net.kyori.adventure.text.Component;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class ExamplePlugin extends JavaPlugin {\n\n    @Override\n    public void onEnable() {\n        // Command must ALSO exist under 'commands:' in plugin.yml, or getCommand returns null\n        Objects.requireNonNull(getCommand(\"hello\"), \"Command 'hello' missing from plugin.yml\")\n                .setExecutor((sender, command, label, args) -> {\n                    sender.sendMessage(Component.text(\"Hello from ExamplePlugin!\"));\n                    return true;\n                });\n        // Listeners: getServer().getPluginManager().registerEvents(new MyListener(), this);\n        getLogger().info(\"ExamplePlugin enabled\");\n    }\n\n    @Override\n    public void onDisable() {\n        getLogger().info(\"ExamplePlugin disabled\");\n    }\n}"
+  },
+  {
+   "id": "cmd-basic-executor",
+   "category": "commands",
+   "title": "Basic command executor class with Adventure Component message",
+   "tags": [
+    "CommandExecutor",
+    "onCommand",
+    "basic command",
+    "comando basico",
+    "crear comando",
+    "sendMessage",
+    "Adventure Component",
+    "mensaje al jugador",
+    "paper 1.21"
+   ],
+   "notes": "Register in onEnable: getCommand(\"hello\").setExecutor(new HelloCommand()); AND declare 'hello' under commands: in plugin.yml — forgetting the yml entry is the #1 cause of NPE on enable / 'Unknown command' in game. Return true = handled; return false = Bukkit shows the usage: string from plugin.yml. Use Adventure Components — sendMessage(String) is deprecated on Paper, and legacy ChatColor codes are the old API; use net.kyori.adventure.text.format.NamedTextColor instead. Exact signature (verified, Paper 1.21.4): boolean onCommand(CommandSender sender, Command command, String label, String[] args).",
+   "code": "package com.example.exampleplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\n\npublic final class HelloCommand implements CommandExecutor {\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        sender.sendMessage(Component.text(\"Hello from Paper 1.21!\", NamedTextColor.GREEN));\n        return true; // false would show the usage string from plugin.yml\n    }\n}"
+  },
+  {
+   "id": "cmd-args-tab-complete",
+   "category": "commands",
+   "title": "Command with arguments + tab completion (TabExecutor, online-player suggestions)",
+   "tags": [
+    "tab completion",
+    "TabExecutor",
+    "TabCompleter",
+    "onTabComplete",
+    "autocompletado",
+    "argumentos de comando",
+    "command arguments",
+    "sugerencias",
+    "completar jugadores",
+    "paper 1.21"
+   ],
+   "notes": "Register BOTH in onEnable: PluginCommand cmd = getCommand(\"greet\"); GreetCommand exec = new GreetCommand(); cmd.setExecutor(exec); cmd.setTabCompleter(exec); — don't rely on setExecutor alone wiring the completer. Returning an EMPTY list from onTabComplete = no suggestions; returning NULL falls back to the default (online player names) — a common surprise. Always filter suggestions by the partial arg (args[args.length-1] / args[0] here) or the client shows everything. Bukkit.getPlayerExact(name) returns null if offline — always null-check. Exact signature (verified, Paper 1.21.4): List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args).",
+   "code": "package com.example.exampleplugin;\n\nimport java.util.List;\nimport java.util.Locale;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.command.TabExecutor;\nimport org.bukkit.entity.Player;\n\npublic final class GreetCommand implements TabExecutor {\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        if (args.length != 1) {\n            return false; // shows usage from plugin.yml\n        }\n        Player target = Bukkit.getPlayerExact(args[0]);\n        if (target == null) {\n            sender.sendMessage(Component.text(\"Player not found: \" + args[0], NamedTextColor.RED));\n            return true;\n        }\n        target.sendMessage(Component.text(\"You were greeted by \" + sender.getName() + \"!\", NamedTextColor.GOLD));\n        return true;\n    }\n\n    @Override\n    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {\n        if (args.length == 1) {\n            String prefix = args[0].toLowerCase(Locale.ROOT);\n            return Bukkit.getOnlinePlayers().stream()\n                    .map(Player::getName)\n                    .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(prefix))\n                    .toList();\n        }\n        return List.of(); // empty = no suggestions; null would fall back to online-player names\n    }\n}"
+  },
+  {
+   "id": "cmd-permission-check",
+   "category": "commands",
+   "title": "Permission check inside a command with a custom denial message (hasPermission)",
+   "tags": [
+    "permissions",
+    "hasPermission",
+    "permisos",
+    "comprobar permiso",
+    "permission check",
+    "sin permiso",
+    "no permission message",
+    "op",
+    "paper 1.21"
+   ],
+   "notes": "hasPermission works on any CommandSender; the CONSOLE always passes every permission check. Declare the node under permissions: in plugin.yml with a sensible default (default: op for admin stuff) — an UNDECLARED permission node defaults to op-only. Two ways to gate a command: (a) 'permission:' key on the command in plugin.yml — blocks before your executor runs but shows Bukkit's generic denial message; (b) this in-code check — lets you send your own Component message. Don't do both unless you want the generic message to win. Return true after the denial message, otherwise the usage string is also shown.",
+   "code": "package com.example.exampleplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\n\npublic final class AdminCommand implements CommandExecutor {\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        if (!sender.hasPermission(\"exampleplugin.admin\")) {\n            sender.sendMessage(Component.text(\"You don't have permission to do that.\", NamedTextColor.RED));\n            return true; // handled — don't also show usage\n        }\n        sender.sendMessage(Component.text(\"Admin action executed.\", NamedTextColor.GREEN));\n        return true;\n    }\n}"
+  },
+  {
+   "id": "cmd-permission-defaults-yml",
+   "category": "commands",
+   "title": "Permission nodes in plugin.yml: defaults (true/false/op/not op) and children",
+   "tags": [
+    "permissions yml",
+    "permission default",
+    "children",
+    "permisos por defecto",
+    "nodos de permiso",
+    "default op",
+    "jerarquia de permisos",
+    "plugin.yml permissions",
+    "paper 1.21"
+   ],
+   "notes": "Valid defaults: true (everyone), false (nobody), op (operators only), 'not op' (quote it — it contains a space). A node NOT declared anywhere defaults to op. children: maps child-node -> boolean: true = granting the parent also grants the child; false = granting the parent NEGATES the child. Wildcards like exampleplugin.* are NOT automatic — declare a parent node with children explicitly (permission plugins like LuckPerms add their own wildcard handling on top). Permission managers (LuckPerms) override these defaults per group/user; the defaults here are what applies on a vanilla-permissions server.",
+   "code": "permissions:\n  exampleplugin.use:\n    description: Basic usage\n    default: true\n  exampleplugin.admin:\n    description: All admin tools (parent node)\n    default: op\n    children:\n      exampleplugin.admin.reload: true\n      exampleplugin.use: true\n  exampleplugin.admin.reload:\n    description: Reload the plugin config\n    default: false\n  exampleplugin.newbie:\n    description: Granted to everyone who is not an operator\n    default: 'not op'"
+  },
+  {
+   "id": "cmd-console-vs-player",
+   "category": "commands",
+   "title": "Console vs player sender handling (instanceof Player pattern match)",
+   "tags": [
+    "console sender",
+    "player only command",
+    "instanceof Player",
+    "consola",
+    "comando solo jugador",
+    "CommandSender",
+    "ConsoleCommandSender",
+    "sender check",
+    "paper 1.21"
+   ],
+   "notes": "NEVER blind-cast (Player) sender — the sender can be the console, a command block, or RCON, and the cast throws ClassCastException. Java 21 pattern matching (instanceof Player player) checks and binds in one step. Only gate on Player when you genuinely need a location/inventory/world — commands that just print or mutate config should keep working from console (server owners run them from scripts). The console also receives Adventure Components fine (colors render as ANSI). If a command is player-only AND you want tab-complete/permissions too, combine this check with the TabExecutor and hasPermission patterns.",
+   "code": "package com.example.exampleplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.entity.Player;\n\npublic final class WhereAmICommand implements CommandExecutor {\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        if (!(sender instanceof Player player)) {\n            sender.sendMessage(Component.text(\"This command can only be used by a player.\", NamedTextColor.RED));\n            return true;\n        }\n        player.sendMessage(Component.text(\n                \"You are at \" + player.getLocation().getBlockX()\n                        + \", \" + player.getLocation().getBlockY()\n                        + \", \" + player.getLocation().getBlockZ(),\n                NamedTextColor.AQUA));\n        return true;\n    }\n}"
+  },
+  {
+   "id": "cmd-subcommand-router",
+   "category": "commands",
+   "title": "Subcommand router pattern (/kit list|give|reload) with switch and tab completion",
+   "tags": [
+    "subcommands",
+    "subcomandos",
+    "switch subcommand",
+    "command router",
+    "multiples subcomandos",
+    "kit command",
+    "enrutador de comandos",
+    "tab complete subcommands",
+    "paper 1.21"
+   ],
+   "notes": "One plugin.yml command + args[0] routing beats registering many top-level commands. Always lowercase args[0] with Locale.ROOT (Turkish-locale 'I' bug). Per-subcommand permission checks go inside each case (exampleplugin.kit.reload here). Tab completion must mirror the router: args.length == 1 suggests subcommand names filtered by the typed prefix; deeper args suggest that subcommand's own arguments. Register with setExecutor AND setTabCompleter (the class implements TabExecutor). Returning false on empty args shows the usage: line from plugin.yml — write it as usage: /<command> <list|give|reload>.",
+   "code": "package com.example.exampleplugin;\n\nimport java.util.List;\nimport java.util.Locale;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.command.TabExecutor;\n\npublic final class KitCommand implements TabExecutor {\n\n    private static final List<String> SUBCOMMANDS = List.of(\"list\", \"give\", \"reload\");\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        if (args.length == 0) {\n            return false; // shows usage from plugin.yml\n        }\n        switch (args[0].toLowerCase(Locale.ROOT)) {\n            case \"list\" -> sender.sendMessage(Component.text(\"Kits: starter, pvp\", NamedTextColor.GREEN));\n            case \"give\" -> {\n                if (args.length < 2) {\n                    sender.sendMessage(Component.text(\"Usage: /kit give <name>\", NamedTextColor.RED));\n                    return true;\n                }\n                sender.sendMessage(Component.text(\"Giving kit \" + args[1], NamedTextColor.GREEN));\n            }\n            case \"reload\" -> {\n                if (!sender.hasPermission(\"exampleplugin.kit.reload\")) {\n                    sender.sendMessage(Component.text(\"No permission.\", NamedTextColor.RED));\n                    return true;\n                }\n                sender.sendMessage(Component.text(\"Config reloaded.\", NamedTextColor.GREEN));\n            }\n            default -> sender.sendMessage(Component.text(\"Unknown subcommand: \" + args[0], NamedTextColor.RED));\n        }\n        return true;\n    }\n\n    @Override\n    public List<String> onTabComplete(CommandSender sender, Command command, String label, String[] args) {\n        if (args.length == 1) {\n            String prefix = args[0].toLowerCase(Locale.ROOT);\n            return SUBCOMMANDS.stream().filter(s -> s.startsWith(prefix)).toList();\n        }\n        return List.of();\n    }\n}"
+  },
+  {
+   "id": "events-listener-register-boilerplate",
+   "category": "events",
+   "title": "Register an event Listener in onEnable (base pattern every other event card assumes)",
+   "tags": [
+    "event listener",
+    "registerEvents",
+    "onEnable",
+    "plugin.yml",
+    "registrar eventos",
+    "escuchar eventos",
+    "clase principal",
+    "JavaPlugin",
+    "boilerplate"
+   ],
+   "notes": "Classic failures: (1) forgetting getServer().getPluginManager().registerEvents(...) — the handler compiles but silently never fires; (2) missing @EventHandler annotation on the method — same silent failure; (3) missing api-version: '1.21' in plugin.yml — server logs a legacy-plugin warning and remaps materials; (4) registering the same listener instance twice — every event fires twice. Handler methods must be public, return void, and take exactly one event parameter. Use @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true) when you need ordering or want to skip already-cancelled events.",
+   "code": "// ===== src/main/java/com/example/myplugin/MyPlugin.java =====\npackage com.example.myplugin;\n\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class MyPlugin extends JavaPlugin {\n    @Override\n    public void onEnable() {\n        getServer().getPluginManager().registerEvents(new JoinListener(), this);\n    }\n}\n\n// ===== src/main/java/com/example/myplugin/JoinListener.java =====\npackage com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.player.PlayerJoinEvent;\n\npublic final class JoinListener implements Listener {\n    @EventHandler\n    public void onJoin(PlayerJoinEvent event) {\n        event.getPlayer().sendMessage(Component.text(\"Hello from the event system!\"));\n    }\n}\n\n/* ===== src/main/resources/plugin.yml =====\nname: MyPlugin\nversion: 1.0.0\nmain: com.example.myplugin.MyPlugin\napi-version: '1.21'\n*/"
+  },
+  {
+   "id": "events-join-message-minimessage",
+   "category": "events",
+   "title": "PlayerJoinEvent: custom join message with Adventure Components and MiniMessage",
+   "tags": [
+    "join message",
+    "PlayerJoinEvent",
+    "MiniMessage",
+    "welcome message",
+    "mensaje de bienvenida",
+    "mensaje al entrar",
+    "unirse al servidor",
+    "adventure component",
+    "gradient"
+   ],
+   "notes": "Use event.joinMessage(Component) — the String setJoinMessage(String) is deprecated on Paper and subject to removal. Pass null to joinMessage(...) to hide the join message entirely. MiniMessage ships bundled with Paper (net.kyori.adventure.text.minimessage) — no extra dependency needed. NEVER splice raw player-controlled text into a MiniMessage template string (tag injection); inject it via Placeholder.component/Placeholder.unparsed as shown. Do not use legacy ChatColor codes — they don't mix with Components.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.minimessage.MiniMessage;\nimport net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.player.PlayerJoinEvent;\n\npublic final class JoinListener implements Listener {\n    private static final MiniMessage MM = MiniMessage.miniMessage();\n\n    @EventHandler\n    public void onJoin(PlayerJoinEvent event) {\n        // Broadcast join message seen by everyone (null would hide it)\n        event.joinMessage(MM.deserialize(\n                \"<gradient:#00e5ff:#7c4dff>[+]</gradient> <yellow><name> joined the server!\",\n                Placeholder.component(\"name\", event.getPlayer().displayName())));\n\n        // Private welcome only the joining player sees\n        event.getPlayer().sendMessage(MM.deserialize(\"<green>Welcome! Type <gold>/help</gold> to get started.\"));\n    }\n}"
+  },
+  {
+   "id": "events-quit-message-custom",
+   "category": "events",
+   "title": "PlayerQuitEvent: customize or hide the quit message",
+   "tags": [
+    "quit message",
+    "PlayerQuitEvent",
+    "leave message",
+    "mensaje de salida",
+    "salir del servidor",
+    "desconexion",
+    "adventure component",
+    "hide quit message"
+   ],
+   "notes": "Use event.quitMessage(Component); the String setQuitMessage(String) is deprecated on Paper. Pass null to suppress the message completely (common for vanish plugins). Note: a kicked player fires PlayerKickEvent (with its own leaveMessage) AND PlayerQuitEvent — if you customize both you may double-announce. The player is still valid inside the handler, but do not schedule delayed tasks that assume they remain online.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.player.PlayerQuitEvent;\n\npublic final class QuitListener implements Listener {\n    @EventHandler\n    public void onQuit(PlayerQuitEvent event) {\n        event.quitMessage(Component.text()\n                .append(Component.text(\"[-] \", NamedTextColor.RED))\n                .append(event.getPlayer().displayName())\n                .append(Component.text(\" left the game\", NamedTextColor.GRAY))\n                .build());\n\n        // Or hide it entirely:\n        // event.quitMessage(null);\n    }\n}"
+  },
+  {
+   "id": "events-blockbreak-cancel-permission",
+   "category": "events",
+   "title": "BlockBreakEvent: cancel breaking a block unless the player has a permission",
+   "tags": [
+    "BlockBreakEvent",
+    "cancel block break",
+    "permission gate",
+    "protect blocks",
+    "romper bloques",
+    "cancelar evento",
+    "permiso",
+    "proteger bloques",
+    "hasPermission"
+   ],
+   "notes": "Use ignoreCancelled = true so you don't fight protection plugins (WorldGuard etc.) that already cancelled the event — and so uncancelling by accident is impossible. setCancelled(true) keeps the block in the world; if instead you want the block to break but drop nothing, use event.setDropItems(false). Permissions do NOT need a plugin.yml entry to work (ops/permission plugins grant them), though you may declare defaults under a permissions: section. Send feedback with Adventure Components, not legacy ChatColor strings.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Material;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.block.BlockBreakEvent;\n\npublic final class BreakListener implements Listener {\n    @EventHandler(ignoreCancelled = true)\n    public void onBreak(BlockBreakEvent event) {\n        if (event.getBlock().getType() != Material.DIAMOND_ORE) return;\n        if (event.getPlayer().hasPermission(\"myplugin.break.diamond\")) return;\n\n        event.setCancelled(true);\n        event.getPlayer().sendMessage(Component.text(\n                \"You don't have permission to mine diamond ore!\", NamedTextColor.RED));\n    }\n}"
+  },
+  {
+   "id": "events-interact-rightclick-item",
+   "category": "events",
+   "title": "PlayerInteractEvent: detect right-click and read the ItemStack in hand (e.g. a wand item)",
+   "tags": [
+    "PlayerInteractEvent",
+    "right click",
+    "item in hand",
+    "wand",
+    "clic derecho",
+    "objeto en mano",
+    "varita",
+    "detectar clic",
+    "EquipmentSlot"
+   ],
+   "notes": "PlayerInteractEvent fires ONCE PER HAND on right-clicks — without the getHand() == EquipmentSlot.HAND guard your code runs twice. getItem() is @Nullable (null when the hand is empty); getHand() is @Nullable (null for Action.PHYSICAL, e.g. pressure plates); getClickedBlock() is null for RIGHT_CLICK_AIR. For finer control than setCancelled(true), use setUseInteractedBlock(Event.Result.DENY) / setUseItemInHand(Event.Result.DENY) to block only one side of the interaction (e.g. let a chest open but stop the item use).",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport org.bukkit.Material;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.block.Action;\nimport org.bukkit.event.player.PlayerInteractEvent;\nimport org.bukkit.inventory.EquipmentSlot;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class InteractListener implements Listener {\n    @EventHandler\n    public void onInteract(PlayerInteractEvent event) {\n        if (event.getHand() != EquipmentSlot.HAND) return; // event fires once per hand — handle main hand only\n\n        Action action = event.getAction();\n        if (action != Action.RIGHT_CLICK_AIR && action != Action.RIGHT_CLICK_BLOCK) return;\n\n        ItemStack item = event.getItem(); // null when the hand is empty\n        if (item == null || item.getType() != Material.BLAZE_ROD) return;\n\n        event.setCancelled(true); // stop vanilla use (placing, eating, etc.)\n        event.getPlayer().sendMessage(Component.text(\"You used the magic wand!\"));\n        if (event.getClickedBlock() != null) {\n            event.getPlayer().sendMessage(Component.text(\n                    \"Target: \" + event.getClickedBlock().getType()));\n        }\n    }\n}"
+  },
+  {
+   "id": "events-death-keepinventory-custom-message",
+   "category": "events",
+   "title": "PlayerDeathEvent: keep inventory/XP on death and set a custom death message",
+   "tags": [
+    "PlayerDeathEvent",
+    "keep inventory",
+    "death message",
+    "mensaje de muerte",
+    "mantener inventario",
+    "morir",
+    "keepInventory",
+    "experiencia",
+    "custom death message"
+   ],
+   "notes": "DUPE WARNING: setKeepInventory(true) does NOT clear the drop list — you MUST call event.getDrops().clear() or players keep their items AND the copies drop on the ground. Same for XP: pair setKeepLevel(true) with setDroppedExp(0). Use event.deathMessage(Component) — the String setDeathMessage(String) is deprecated on Paper. deathMessage(null) hides the message. getEntity() (and Paper's getPlayer()) already return Player on this event — no cast needed.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.entity.PlayerDeathEvent;\n\npublic final class DeathListener implements Listener {\n    @EventHandler\n    public void onDeath(PlayerDeathEvent event) {\n        // Keep inventory: MUST also clear drops, or items duplicate on the ground\n        event.setKeepInventory(true);\n        event.getDrops().clear();\n\n        // Keep XP: MUST also zero dropped XP\n        event.setKeepLevel(true);\n        event.setDroppedExp(0);\n\n        event.deathMessage(Component.text()\n                .append(event.getEntity().displayName())\n                .append(Component.text(\" bit the dust!\", NamedTextColor.DARK_RED))\n                .build());\n    }\n}"
+  },
+  {
+   "id": "events-asyncchat-format-filter",
+   "category": "events",
+   "title": "AsyncChatEvent (Paper): reformat chat with a ChatRenderer and filter/cancel bad words",
+   "tags": [
+    "AsyncChatEvent",
+    "chat format",
+    "chat filter",
+    "ChatRenderer",
+    "formato de chat",
+    "filtro de chat",
+    "censurar palabras",
+    "renderer",
+    "chat event paper"
+   ],
+   "notes": "Use Paper's io.papermc.paper.event.player.AsyncChatEvent — NOT the deprecated String-based AsyncPlayerChatEvent (its %s format API is legacy). The event usually fires OFF the main thread: never touch worlds, blocks, or inventories inside the handler — schedule with getServer().getScheduler().runTask(plugin, ...) if you must. renderer(...) replaces the chat format for all viewers; ChatRenderer.viewerUnaware's lambda is (Player source, Component sourceDisplayName, Component message). To inspect the text, serialize the Component with PlainTextComponentSerializer — do not toString() it. setCancelled(true) hides the message from everyone.",
+   "code": "package com.example.myplugin;\n\nimport io.papermc.paper.chat.ChatRenderer;\nimport io.papermc.paper.event.player.AsyncChatEvent;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\n\npublic final class ChatListener implements Listener {\n    @EventHandler\n    public void onChat(AsyncChatEvent event) {\n        // FILTER: read the message as plain text (never Component#toString())\n        String plain = PlainTextComponentSerializer.plainText().serialize(event.message());\n        if (plain.toLowerCase().contains(\"badword\")) {\n            event.setCancelled(true);\n            event.getPlayer().sendMessage(Component.text(\"Watch your language!\", NamedTextColor.RED));\n            return;\n        }\n\n        // FORMAT: \"<Name> msg\" -> \"Name: msg\" with colors, for all viewers\n        event.renderer(ChatRenderer.viewerUnaware((source, sourceDisplayName, message) ->\n                Component.text()\n                        .append(sourceDisplayName.color(NamedTextColor.GRAY))\n                        .append(Component.text(\": \", NamedTextColor.DARK_GRAY))\n                        .append(message.color(NamedTextColor.WHITE))\n                        .build()));\n    }\n}"
+  },
+  {
+   "id": "events-damage-cancel-fall",
+   "category": "events",
+   "title": "EntityDamageEvent: disable fall damage for players (filter by cause + entity type)",
+   "tags": [
+    "EntityDamageEvent",
+    "fall damage",
+    "cancel damage",
+    "DamageCause",
+    "daño de caida",
+    "desactivar daño",
+    "cancelar daño",
+    "sin daño de caida",
+    "no fall damage"
+   ],
+   "notes": "EntityDamageEvent fires for EVERY entity (mobs, armor stands, items frames...) — always instanceof-check before treating it as a Player. Filter by event.getCause() (DamageCause.FALL here; FIRE, DROWNING, VOID etc. work the same). Use ignoreCancelled = true so you don't process events another plugin (god mode, regions) already cancelled. For attacker-based damage (PvP, mob hits) listen to the EntityDamageByEntityEvent subclass instead and use getDamager(). This handler runs on the main thread — world access is safe.",
+   "code": "package com.example.myplugin;\n\nimport org.bukkit.entity.Player;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.entity.EntityDamageEvent;\n\npublic final class DamageListener implements Listener {\n    @EventHandler(ignoreCancelled = true)\n    public void onDamage(EntityDamageEvent event) {\n        if (!(event.getEntity() instanceof Player player)) return; // fires for ALL entities\n        if (event.getCause() != EntityDamageEvent.DamageCause.FALL) return;\n        if (!player.hasPermission(\"myplugin.nofall\")) return;\n\n        event.setCancelled(true);\n    }\n}"
+  },
+  {
+   "id": "sched-repeating-broadcast",
+   "category": "scheduling-config",
+   "title": "Repeating task: broadcast a message every N minutes with BukkitRunnable.runTaskTimer",
+   "tags": [
+    "repeating task",
+    "scheduler",
+    "broadcast",
+    "runTaskTimer",
+    "timer",
+    "announcement",
+    "tarea repetitiva",
+    "anuncio automatico",
+    "mensaje cada x minutos",
+    "temporizador",
+    "programador de tareas"
+   ],
+   "notes": "Time is in TICKS: 20 ticks = 1 second, so minutes*60*20. runTaskTimer(plugin, delay, period): the FIRST arg after plugin is the initial delay, the second is the repeat period — swapping them is a classic bug. Keep the BukkitTask reference and cancel() it in onDisable(), otherwise /reload leaks tasks (Paper cancels plugin tasks on disable, but explicit cancel is the safe habit and required if you restart the task on config reload). Use Bukkit.broadcast(Component) — broadcastMessage(String) is deprecated on Paper. Note: on 1.21.4 the SCHEDULER methods that take a BukkitRunnable argument are deprecated (use the Runnable overloads), but calling runTaskTimer directly ON a BukkitRunnable instance, as here, is NOT deprecated.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.plugin.java.JavaPlugin;\nimport org.bukkit.scheduler.BukkitRunnable;\nimport org.bukkit.scheduler.BukkitTask;\n\npublic final class MyPlugin extends JavaPlugin {\n\n    private BukkitTask broadcastTask;\n\n    @Override\n    public void onEnable() {\n        saveDefaultConfig();\n        long minutes = getConfig().getLong(\"broadcast-interval-minutes\", 5L);\n        long periodTicks = minutes * 60L * 20L; // 20 ticks = 1 second\n\n        this.broadcastTask = new BukkitRunnable() {\n            @Override\n            public void run() {\n                Bukkit.broadcast(Component.text(\"Remember to vote for the server!\", NamedTextColor.GOLD));\n            }\n        }.runTaskTimer(this, periodTicks, periodTicks); // (plugin, initial delay, period)\n\n        getLogger().info(\"Broadcast task started, every \" + minutes + \" minutes\");\n    }\n\n    @Override\n    public void onDisable() {\n        if (broadcastTask != null) {\n            broadcastTask.cancel();\n        }\n    }\n}"
+  },
+  {
+   "id": "sched-delayed-task",
+   "category": "scheduling-config",
+   "title": "Delayed task: run code once after N seconds (warmup teleport) with runTaskLater",
+   "tags": [
+    "delayed task",
+    "runTaskLater",
+    "delay",
+    "warmup",
+    "teleport countdown",
+    "schedule once",
+    "tarea retrasada",
+    "retraso",
+    "teletransporte con espera",
+    "ejecutar despues de segundos"
+   ],
+   "notes": "Delay is in TICKS (5 seconds = 100L ticks), not milliseconds — passing 5000 waits 4+ minutes. Always re-check player.isOnline() (or re-fetch via Bukkit.getPlayer(uuid)) inside the delayed body: the player can log out during the delay and acting on a stale Player reference throws or silently no-ops. runTaskLater returns a BukkitTask — store it if you need to cancel (e.g., cancel the teleport when the player moves, via a PlayerMoveEvent listener). The lambda runs on the MAIN thread, so world access (teleport) is safe; do NOT confuse with runTaskLaterAsynchronously.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\nimport org.bukkit.scheduler.BukkitTask;\n\npublic final class DelayedActions {\n\n    private final JavaPlugin plugin;\n\n    public DelayedActions(JavaPlugin plugin) {\n        this.plugin = plugin;\n    }\n\n    /** Sends a warmup message, then teleports the player to spawn 5 seconds later. */\n    public BukkitTask delayedSpawnTeleport(Player player) {\n        player.sendMessage(Component.text(\"Teleporting in 5 seconds, don't move!\", NamedTextColor.YELLOW));\n\n        return plugin.getServer().getScheduler().runTaskLater(plugin, () -> {\n            if (!player.isOnline()) {\n                return; // player logged out during the warmup\n            }\n            player.teleport(player.getWorld().getSpawnLocation());\n            player.sendMessage(Component.text(\"Whoosh!\", NamedTextColor.GREEN));\n        }, 5L * 20L); // 100 ticks = 5 seconds; keep the returned task to cancel() on move\n    }\n}"
+  },
+  {
+   "id": "sched-async-main-thread",
+   "category": "scheduling-config",
+   "title": "Async task for slow work (DB/HTTP), then hop back to the main thread for world access",
+   "tags": [
+    "async",
+    "asynchronous",
+    "runTaskAsynchronously",
+    "runTask",
+    "main thread",
+    "database query",
+    "thread safety",
+    "asincrono",
+    "hilo principal",
+    "base de datos",
+    "consulta lenta",
+    "volver al hilo principal"
+   ],
+   "notes": "THE cardinal rule: the Bukkit/Paper API (world, blocks, entities, inventories, most Player methods) is NOT thread-safe — touching it from an async task throws IllegalStateException ('Asynchronous entity/chunk access!') or silently corrupts state. Only do blocking work (JDBC, HTTP, heavy computation, file IO) async, then schedule a runTask (sync) callback for anything that touches the game. Inside the callback, RE-FETCH the player by UUID — the original Player object may belong to someone who logged off (and after a relog it is a stale entity). sendMessage on Paper is one of the few thread-safe calls, but re-fetching and doing it sync is the pattern that never breaks. Never use java.util.Timer or raw Threads for this; the scheduler ties task lifetime to the plugin.",
+   "code": "package com.example.myplugin;\n\nimport java.util.UUID;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class StatsService {\n\n    private final JavaPlugin plugin;\n\n    public StatsService(JavaPlugin plugin) {\n        this.plugin = plugin;\n    }\n\n    public void loadAndAnnounce(Player player) {\n        UUID uuid = player.getUniqueId();\n\n        // 1) Heavy/blocking work OFF the main thread (SQL, HTTP, file IO)\n        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {\n            int kills = queryKillsFromDatabase(uuid); // slow blocking call — fine here\n\n            // 2) Hop BACK to the main thread for anything touching the world/entities\n            Bukkit.getScheduler().runTask(plugin, () -> {\n                Player online = Bukkit.getPlayer(uuid); // re-fetch: player may have left\n                if (online == null) {\n                    return;\n                }\n                online.sendMessage(Component.text(\"You have \" + kills + \" kills!\", NamedTextColor.AQUA));\n                online.setLevel(kills); // entity mutation -> main thread ONLY\n            });\n        });\n    }\n\n    private int queryKillsFromDatabase(UUID uuid) {\n        // stand-in for a blocking JDBC/HTTP call\n        return 42;\n    }\n}"
+  },
+  {
+   "id": "cfg-config-defaults-read",
+   "category": "scheduling-config",
+   "title": "config.yml: ship defaults with saveDefaultConfig and read strings, ints, booleans, lists",
+   "tags": [
+    "config.yml",
+    "configuration",
+    "saveDefaultConfig",
+    "getConfig",
+    "getString",
+    "getStringList",
+    "settings",
+    "configuracion",
+    "archivo de configuracion",
+    "leer configuracion",
+    "valores por defecto",
+    "lista de strings"
+   ],
+   "notes": "You MUST ship a config.yml inside the jar at src/main/resources/config.yml, or saveDefaultConfig() throws IllegalArgumentException ('The embedded resource config.yml cannot be found'). saveDefaultConfig() only copies if plugins/<Plugin>/config.yml is missing — it never overwrites user edits. Call it BEFORE the first getConfig() read (typically first line of onEnable). getConfig() returns cached values from enable time; after a manual file edit you need reloadConfig() (see the reload-command card). getStringList returns an empty list (never null) for a missing path. YAML gotcha: unquoted values like 'yes'/'no' parse as booleans, and tabs are illegal in YAML — indent with spaces. Cache values into fields once instead of calling getConfig().getX() in hot paths.",
+   "code": "package com.example.myplugin;\n\n// Ship this file at src/main/resources/config.yml (inside the jar):\n// welcome-message: \"Welcome to the server!\"\n// max-homes: 3\n// spawn-protection-enabled: true\n// blocked-worlds:\n//   - world_nether\n//   - world_the_end\n\nimport java.util.List;\nimport net.kyori.adventure.text.Component;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class MyPlugin extends JavaPlugin {\n\n    private String welcomeMessage;\n    private int maxHomes;\n    private boolean spawnProtection;\n    private List<String> blockedWorlds;\n\n    @Override\n    public void onEnable() {\n        // Copies config.yml from the jar to plugins/MyPlugin/config.yml (only if missing)\n        saveDefaultConfig();\n        loadSettings();\n    }\n\n    public void loadSettings() {\n        welcomeMessage = getConfig().getString(\"welcome-message\", \"Welcome!\");\n        maxHomes = getConfig().getInt(\"max-homes\", 3);\n        spawnProtection = getConfig().getBoolean(\"spawn-protection-enabled\", true);\n        blockedWorlds = getConfig().getStringList(\"blocked-worlds\"); // empty list if absent, never null\n        getLogger().info(\"Config loaded: maxHomes=\" + maxHomes + \", blockedWorlds=\" + blockedWorlds);\n    }\n\n    public Component welcomeComponent() {\n        return Component.text(welcomeMessage);\n    }\n\n    public boolean isWorldBlocked(String worldName) {\n        return blockedWorlds.contains(worldName);\n    }\n}"
+  },
+  {
+   "id": "cfg-reload-command",
+   "category": "scheduling-config",
+   "title": "/myreload command that re-reads config.yml from disk with reloadConfig()",
+   "tags": [
+    "reload command",
+    "reloadConfig",
+    "reload config",
+    "command executor",
+    "plugin.yml",
+    "comando recargar",
+    "recargar configuracion",
+    "comando reload",
+    "actualizar config sin reiniciar"
+   ],
+   "notes": "TWO registrations or it fails: the command must exist under commands: in plugin.yml AND be wired with getCommand(\"myreload\").setExecutor(...) in onEnable — if the plugin.yml entry is missing, getCommand returns null and you get a NullPointerException at enable; if setExecutor is missing, the command 'exists' but does nothing. reloadConfig() only refreshes what getConfig() returns — any values you cached into fields at enable time stay stale, so re-run your loadSettings()-style method after reloading (shown below). api-version: '1.21' (quoted, else YAML parses it as a float) is required in plugin.yml on modern Paper. Messages use Adventure Components; legacy ChatColor + String sendMessage is deprecated on Paper.",
+   "code": "package com.example.myplugin;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class MyPlugin extends JavaPlugin implements CommandExecutor {\n\n    private int maxHomes;\n\n    @Override\n    public void onEnable() {\n        saveDefaultConfig();\n        loadSettings();\n        getCommand(\"myreload\").setExecutor(this); // NPE here => command missing from plugin.yml\n    }\n\n    private void loadSettings() {\n        maxHomes = getConfig().getInt(\"max-homes\", 3);\n    }\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        reloadConfig();   // re-reads plugins/MyPlugin/config.yml from disk\n        loadSettings();   // refresh cached fields — reloadConfig alone does NOT update them\n        sender.sendMessage(Component.text(\"Config reloaded! max-homes=\" + maxHomes, NamedTextColor.GREEN));\n        return true;\n    }\n}\n\n/* plugin.yml (src/main/resources/plugin.yml):\nname: MyPlugin\nversion: 1.0.0\nmain: com.example.myplugin.MyPlugin\napi-version: '1.21'\ncommands:\n  myreload:\n    description: Reload the plugin configuration\n    permission: myplugin.reload\npermissions:\n  myplugin.reload:\n    default: op\n*/"
+  },
+  {
+   "id": "cfg-playerdata-yaml",
+   "category": "scheduling-config",
+   "title": "Persist per-player data in a custom playerdata.yml via YamlConfiguration",
+   "tags": [
+    "player data",
+    "YamlConfiguration",
+    "persistence",
+    "save file",
+    "custom yml",
+    "uuid storage",
+    "datos de jugador",
+    "guardar datos",
+    "archivo yml personalizado",
+    "persistencia",
+    "estadisticas jugador"
+   ],
+   "notes": "Never key player data by name — names change; key by UUID string. YamlConfiguration.loadConfiguration(File) returns an EMPTY config (not null, no exception) when the file doesn't exist — first run just works. save(File) throws IOException, so wrap it, and mkdirs() the data folder first: on a fresh install plugins/MyPlugin/ doesn't exist yet and save() fails. data.set(...) only mutates memory — nothing hits disk until save(). Save on PlayerQuitEvent AND in onDisable() (quit events don't fire for players online during a server stop... they do fire on stop, but onDisable is your safety net for crashes of your own listeners). For frequent saves, do the disk write async (see the async-autosave card) — save() is blocking file IO. Register the Listener or onQuit never fires.",
+   "code": "package com.example.myplugin;\n\nimport java.io.File;\nimport java.io.IOException;\nimport java.util.UUID;\nimport org.bukkit.configuration.file.YamlConfiguration;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.player.PlayerQuitEvent;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class PlayerDataStore implements Listener {\n\n    private final JavaPlugin plugin;\n    private final File file;\n    private final YamlConfiguration data;\n\n    public PlayerDataStore(JavaPlugin plugin) {\n        this.plugin = plugin;\n        this.file = new File(plugin.getDataFolder(), \"playerdata.yml\");\n        this.data = YamlConfiguration.loadConfiguration(file); // empty config if file missing\n        plugin.getServer().getPluginManager().registerEvents(this, plugin);\n    }\n\n    public int getKills(UUID uuid) {\n        return data.getInt(\"players.\" + uuid + \".kills\", 0);\n    }\n\n    public void addKill(UUID uuid) {\n        data.set(\"players.\" + uuid + \".kills\", getKills(uuid) + 1); // memory only until save()\n    }\n\n    public void save() {\n        try {\n            plugin.getDataFolder().mkdirs(); // fresh installs have no data folder yet\n            data.save(file);\n        } catch (IOException e) {\n            plugin.getSLF4JLogger().error(\"Could not save playerdata.yml\", e);\n        }\n    }\n\n    @EventHandler\n    public void onQuit(PlayerQuitEvent event) {\n        save(); // also call save() from your plugin's onDisable()\n    }\n}"
+  },
+  {
+   "id": "sched-cooldown-hashmap",
+   "category": "scheduling-config",
+   "title": "Per-player command cooldown with HashMap<UUID, Long> and System.currentTimeMillis",
+   "tags": [
+    "cooldown",
+    "HashMap",
+    "UUID",
+    "rate limit",
+    "kit command",
+    "currentTimeMillis",
+    "enfriamiento",
+    "tiempo de espera",
+    "reutilizacion",
+    "comando kit",
+    "limite de uso"
+   ],
+   "notes": "Key by UUID, never by Player object (leaks the entity and breaks across relogs) and never by name. Compare timestamps in millis; convert the remainder to seconds with ceiling rounding (+999/1000) so the message never says 'wait 0s' while still blocking. A plain HashMap is fine because commands run on the main thread — if you also touch the map from async tasks, switch to ConcurrentHashMap. Entries for players who never return leak slowly; optionally remove on PlayerQuitEvent or use lastUsed.entrySet().removeIf(...) periodically. The instanceof pattern (sender instanceof Player player) needs Java 16+, which Paper 1.21 (Java 21) guarantees. Remember the plugin.yml commands: entry for /kit plus getCommand(\"kit\").setExecutor(new KitCommand()) in onEnable.",
+   "code": "package com.example.myplugin;\n\nimport java.util.HashMap;\nimport java.util.Map;\nimport java.util.UUID;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Material;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.entity.Player;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class KitCommand implements CommandExecutor {\n\n    private static final long COOLDOWN_MILLIS = 60_000L; // 60 seconds\n    private final Map<UUID, Long> lastUsed = new HashMap<>();\n\n    @Override\n    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n        if (!(sender instanceof Player player)) {\n            sender.sendMessage(Component.text(\"Players only.\", NamedTextColor.RED));\n            return true;\n        }\n\n        long now = System.currentTimeMillis();\n        Long last = lastUsed.get(player.getUniqueId());\n        if (last != null && now - last < COOLDOWN_MILLIS) {\n            long secondsLeft = (COOLDOWN_MILLIS - (now - last) + 999L) / 1000L; // ceiling\n            player.sendMessage(Component.text(\"Wait \" + secondsLeft + \"s before using this again.\", NamedTextColor.RED));\n            return true;\n        }\n\n        lastUsed.put(player.getUniqueId(), now);\n        player.getInventory().addItem(new ItemStack(Material.COOKED_BEEF, 16));\n        player.sendMessage(Component.text(\"Kit claimed!\", NamedTextColor.GREEN));\n        return true;\n    }\n}"
+  },
+  {
+   "id": "sched-async-autosave",
+   "category": "scheduling-config",
+   "title": "Periodic autosave: snapshot YAML on the main thread, write to disk async",
+   "tags": [
+    "autosave",
+    "async save",
+    "runTaskTimer",
+    "runTaskAsynchronously",
+    "saveToString",
+    "periodic save",
+    "guardado automatico",
+    "autoguardado",
+    "guardar en segundo plano",
+    "escritura asincrona"
+   ],
+   "notes": "YamlConfiguration is NOT thread-safe: calling data.save(file) from an async task while the main thread mutates the config can corrupt the file or throw ConcurrentModificationException. The safe split: serialize with saveToString() ON the main thread (cheap, memory-only snapshot), then push only the resulting immutable String to an async task for the slow disk write. The outer timer runs sync (runTaskTimer, not runTaskTimerAsynchronously) precisely so the snapshot happens on the main thread. Also run a final SYNCHRONOUS save in onDisable() — you cannot schedule new tasks while the plugin is disabling (IllegalPluginAccessException), so call data.save(file) directly there.",
+   "code": "package com.example.myplugin;\n\nimport java.io.File;\nimport java.io.IOException;\nimport java.nio.charset.StandardCharsets;\nimport java.nio.file.Files;\nimport org.bukkit.Bukkit;\nimport org.bukkit.configuration.file.YamlConfiguration;\nimport org.bukkit.plugin.java.JavaPlugin;\nimport org.bukkit.scheduler.BukkitTask;\n\npublic final class AutoSaver {\n\n    /** Starts a 5-minute autosave loop. Call from onEnable; cancel the returned task in onDisable. */\n    public static BukkitTask start(JavaPlugin plugin, YamlConfiguration data, File target) {\n        long periodTicks = 5L * 60L * 20L; // 5 minutes in ticks\n\n        return Bukkit.getScheduler().runTaskTimer(plugin, () -> {\n            // MAIN thread: snapshot the non-thread-safe YamlConfiguration to a String\n            String snapshot = data.saveToString();\n\n            // ASYNC: slow disk write off the main thread, using only the immutable snapshot\n            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {\n                try {\n                    target.getParentFile().mkdirs();\n                    Files.writeString(target.toPath(), snapshot, StandardCharsets.UTF_8);\n                } catch (IOException e) {\n                    plugin.getSLF4JLogger().error(\"Autosave failed for \" + target.getName(), e);\n                }\n            });\n        }, periodTicks, periodTicks);\n    }\n}"
+  },
+  {
+   "id": "items-inv-item-meta",
+   "category": "items-inv",
+   "title": "Build a custom ItemStack: Adventure display name, lore, enchantments, unbreakable, item flags",
+   "tags": [
+    "itemstack",
+    "custom item",
+    "display name",
+    "lore",
+    "enchantment",
+    "unbreakable",
+    "item flags",
+    "item personalizado",
+    "nombre de item",
+    "encantamiento",
+    "irrompible",
+    "crear item con nombre"
+   ],
+   "notes": "editMeta(Consumer) is a Paper-only convenience (returns boolean); on plain Spigot you must getItemMeta/mutate/setItemMeta. CLASSIC MISTAKE 1: display names and lore render ITALIC by default in 1.16+ — always chain .decoration(TextDecoration.ITALIC, false) or items look wrong. MISTAKE 2: legacy API — meta.setDisplayName(String) + ChatColor is deprecated on Paper; use Component overloads (displayName(Component), lore(List<Component>)). MISTAKE 3: old enchant constants were renamed in 1.20.5+ to vanilla names: DAMAGE_ALL->SHARPNESS, PROTECTION_ENVIRONMENTAL->PROTECTION, DURABILITY->UNBREAKING, DIG_SPEED->EFFICIENCY, ARROW_DAMAGE->POWER — old names do not compile on 1.21. addEnchant's third arg true bypasses the vanilla level cap. Since 1.20.5, ItemFlag.HIDE_ATTRIBUTES only hides attributes the item explicitly has (vanilla component change); HIDE_UNBREAKABLE/HIDE_ENCHANTS work as before.",
+   "code": "import java.util.List;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport net.kyori.adventure.text.format.TextDecoration;\nimport org.bukkit.Material;\nimport org.bukkit.enchantments.Enchantment;\nimport org.bukkit.inventory.ItemFlag;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class ItemFactory {\n\n    public static ItemStack heroSword() {\n        ItemStack item = new ItemStack(Material.DIAMOND_SWORD);\n        item.editMeta(meta -> {\n            meta.displayName(Component.text(\"Hero Sword\", NamedTextColor.GOLD)\n                    .decoration(TextDecoration.ITALIC, false));\n            meta.lore(List.of(\n                    Component.text(\"Forged for champions\", NamedTextColor.GRAY)\n                            .decoration(TextDecoration.ITALIC, false),\n                    Component.text(\"Unbreakable\", NamedTextColor.DARK_GRAY)\n                            .decoration(TextDecoration.ITALIC, false)));\n            meta.addEnchant(Enchantment.SHARPNESS, 5, true);\n            meta.setUnbreakable(true);\n            meta.addItemFlags(ItemFlag.HIDE_UNBREAKABLE);\n        });\n        return item;\n    }\n}"
+  },
+  {
+   "id": "items-inv-kit-command",
+   "category": "items-inv",
+   "title": "/kit command that equips armor and gives items (plugin.yml + setExecutor)",
+   "tags": [
+    "kit",
+    "kit command",
+    "give kit",
+    "armor",
+    "starter kit",
+    "command executor",
+    "comando kit",
+    "dar kit",
+    "armadura",
+    "kit inicial",
+    "equipar armadura"
+   ],
+   "notes": "BOTH halves are required: the plugin.yml commands entry AND getCommand(\"kit\").setExecutor(...) in onEnable. Missing yml entry = 'Unknown command' in game AND getCommand returns null (NPE on setExecutor); missing setExecutor = the command exists but silently does nothing. plugin.yml also needs api-version: '1.21' (quoted!) or the server applies legacy material rewriting and logs warnings. The instanceof-pattern cast (sender instanceof Player player) is the modern check — console has no inventory. setHelmet/setChestplate/etc. OVERWRITE whatever armor the player wears (it is lost); check getInventory().getHelmet() != null first if that matters. addItem returns a HashMap of leftovers when the inventory is full — see items-inv-give-overflow to drop them instead of losing them.",
+   "code": "// ---- plugin.yml (required, or /kit is \"Unknown command\") ----\n// name: KitPlugin\n// version: 1.0.0\n// main: com.example.kit.KitPlugin\n// api-version: '1.21'\n// commands:\n//   kit:\n//     description: Receive the starter kit\n// -------------------------------------------------------------\npackage com.example.kit;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Material;\nimport org.bukkit.command.Command;\nimport org.bukkit.command.CommandExecutor;\nimport org.bukkit.command.CommandSender;\nimport org.bukkit.entity.Player;\nimport org.bukkit.inventory.ItemStack;\nimport org.bukkit.inventory.PlayerInventory;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class KitPlugin extends JavaPlugin {\n\n    @Override\n    public void onEnable() {\n        getCommand(\"kit\").setExecutor(new KitCommand());\n    }\n\n    static final class KitCommand implements CommandExecutor {\n        @Override\n        public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {\n            if (!(sender instanceof Player player)) {\n                sender.sendMessage(Component.text(\"Players only.\", NamedTextColor.RED));\n                return true;\n            }\n            PlayerInventory inv = player.getInventory();\n            inv.setHelmet(new ItemStack(Material.IRON_HELMET));\n            inv.setChestplate(new ItemStack(Material.IRON_CHESTPLATE));\n            inv.setLeggings(new ItemStack(Material.IRON_LEGGINGS));\n            inv.setBoots(new ItemStack(Material.IRON_BOOTS));\n            inv.addItem(new ItemStack(Material.IRON_SWORD),\n                    new ItemStack(Material.COOKED_BEEF, 16));\n            player.sendMessage(Component.text(\"Kit equipped!\", NamedTextColor.GREEN));\n            return true;\n        }\n    }\n}"
+  },
+  {
+   "id": "items-inv-kit-join",
+   "category": "items-inv",
+   "title": "Give a starter kit on first join (PlayerJoinEvent listener registered in onEnable)",
+   "tags": [
+    "join kit",
+    "first join",
+    "welcome kit",
+    "player join event",
+    "listener",
+    "kit al entrar",
+    "primera vez",
+    "evento de entrada",
+    "kit de bienvenida",
+    "al unirse"
+   ],
+   "notes": "CLASSIC MISTAKE: writing the @EventHandler method but never calling registerEvents in onEnable — the event silently never fires. The class must implement Listener (the marker interface) or registerEvents rejects it. player.hasPlayedBefore() gates the kit to the first-ever join; drop that check to give it every join. PlayerJoinEvent runs on the main thread, so inventory access is safe here — never touch inventories/worlds from an async task (BukkitScheduler.runTaskAsynchronously) or you get IllegalStateException / corruption. To customize the join message on Paper use event.joinMessage(Component) (the String setter is deprecated). No plugin.yml command entry is needed for listeners — only name/version/main/api-version.",
+   "code": "package com.example.kit;\n\nimport org.bukkit.Material;\nimport org.bukkit.entity.Player;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.player.PlayerJoinEvent;\nimport org.bukkit.inventory.ItemStack;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class JoinKitPlugin extends JavaPlugin implements Listener {\n\n    @Override\n    public void onEnable() {\n        getServer().getPluginManager().registerEvents(this, this);\n    }\n\n    @EventHandler\n    public void onJoin(PlayerJoinEvent event) {\n        Player player = event.getPlayer();\n        if (player.hasPlayedBefore()) {\n            return; // first-join kit only\n        }\n        player.getInventory().setChestplate(new ItemStack(Material.LEATHER_CHESTPLATE));\n        player.getInventory().addItem(\n                new ItemStack(Material.STONE_SWORD),\n                new ItemStack(Material.BREAD, 8));\n    }\n}"
+  },
+  {
+   "id": "items-inv-gui-menu",
+   "category": "items-inv",
+   "title": "Custom inventory GUI menu: InventoryHolder pattern, filler glass, click handling, safe close",
+   "tags": [
+    "gui",
+    "menu",
+    "custom inventory",
+    "createInventory",
+    "inventory click",
+    "chest menu",
+    "filler glass",
+    "menu de inventario",
+    "inventario personalizado",
+    "interfaz",
+    "cristal de relleno",
+    "clic en inventario"
+   ],
+   "notes": "Identify YOUR menu with a custom InventoryHolder passed to Bukkit.createInventory(holder, size, Component) and instanceof-check event.getInventory().getHolder() — never compare titles (brittle, breaks with Components/translations). Size must be a multiple of 9 (9..54) or createInventory throws. CRITICAL (from the InventoryClickEvent javadoc): NEVER call player.closeInventory() or openInventory() inside an InventoryClickEvent handler — schedule it next tick with getScheduler().runTask(plugin, ...). Cancel FIRST, unconditionally, while the holder matches: this also blocks shift-clicks from the bottom inventory (event.getInventory() is always the TOP inventory of the view). Also cancel InventoryDragEvent or players can drag items into the GUI. event.getCurrentItem() is null on empty slots and getClickedInventory() is null when clicking outside the window — null-check both. Register the listener in onEnable or clicks steal items.",
+   "code": "package com.example.menu;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport net.kyori.adventure.text.format.TextDecoration;\nimport org.bukkit.Bukkit;\nimport org.bukkit.Material;\nimport org.bukkit.entity.Player;\nimport org.bukkit.event.EventHandler;\nimport org.bukkit.event.Listener;\nimport org.bukkit.event.inventory.InventoryClickEvent;\nimport org.bukkit.event.inventory.InventoryDragEvent;\nimport org.bukkit.inventory.Inventory;\nimport org.bukkit.inventory.InventoryHolder;\nimport org.bukkit.inventory.ItemStack;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class MenuPlugin extends JavaPlugin implements Listener {\n\n    @Override\n    public void onEnable() {\n        getServer().getPluginManager().registerEvents(this, this);\n    }\n\n    /** Call from a command executor or event to open the menu. */\n    public void openShop(Player player) {\n        player.openInventory(new ShopMenu().getInventory());\n    }\n\n    static final class ShopMenu implements InventoryHolder {\n        private final Inventory inventory;\n\n        ShopMenu() {\n            this.inventory = Bukkit.createInventory(this, 27,\n                    Component.text(\"Shop\", NamedTextColor.DARK_PURPLE));\n            ItemStack filler = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);\n            filler.editMeta(meta -> meta.displayName(Component.empty()));\n            for (int slot = 0; slot < 27; slot++) {\n                inventory.setItem(slot, filler);\n            }\n            ItemStack sword = new ItemStack(Material.DIAMOND_SWORD);\n            sword.editMeta(meta -> meta.displayName(\n                    Component.text(\"Buy Sword (10 diamonds)\", NamedTextColor.AQUA)\n                            .decoration(TextDecoration.ITALIC, false)));\n            inventory.setItem(13, sword);\n        }\n\n        @Override\n        public Inventory getInventory() {\n            return inventory;\n        }\n    }\n\n    @EventHandler\n    public void onClick(InventoryClickEvent event) {\n        if (!(event.getInventory().getHolder() instanceof ShopMenu)) {\n            return;\n        }\n        event.setCancelled(true); // cancel first: also blocks shift-clicks and number-key swaps\n        ItemStack clicked = event.getCurrentItem();\n        if (clicked == null || clicked.getType() == Material.GRAY_STAINED_GLASS_PANE) {\n            return;\n        }\n        Player player = (Player) event.getWhoClicked();\n        if (event.getSlot() == 13) {\n            player.sendMessage(Component.text(\"Purchased!\", NamedTextColor.GREEN));\n            // NEVER closeInventory() inside this event; schedule for next tick:\n            getServer().getScheduler().runTask(this, player::closeInventory);\n        }\n    }\n\n    @EventHandler\n    public void onDrag(InventoryDragEvent event) {\n        if (event.getInventory().getHolder() instanceof ShopMenu) {\n            event.setCancelled(true);\n        }\n    }\n}"
+  },
+  {
+   "id": "items-inv-check-remove",
+   "category": "items-inv",
+   "title": "Check if a player has N items and remove them (pay-with-items pattern)",
+   "tags": [
+    "check items",
+    "remove items",
+    "containsAtLeast",
+    "pay with items",
+    "item cost",
+    "take items",
+    "comprobar items",
+    "quitar items",
+    "cobrar items",
+    "pagar con items",
+    "verificar inventario"
+   ],
+   "notes": "containsAtLeast(ItemStack, amount) and removeItem(ItemStack...) both match by isSimilar (type + meta): an enchanted or renamed diamond does NOT count toward a plain-diamond cost — this is the usual 'it says I don't have the items' bug. removeItem returns HashMap<Integer, ItemStack> of what could NOT be removed; empty map = full success (amounts over 64 are handled, it drains across slots). It only touches storage contents — not armor slots or offhand. Always check-then-remove in that order on the MAIN thread; both calls in the same tick are atomic (no async race). To count rather than gate: iterate getInventory().getContents(), null-check each slot, sum amounts of stacks where isSimilar matches.",
+   "code": "package com.example.economy;\n\nimport java.util.HashMap;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Material;\nimport org.bukkit.entity.Player;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class ItemPayments {\n\n    /** Returns true and removes the items if the player can pay; false otherwise. */\n    public static boolean charge(Player player, Material currency, int amount) {\n        if (!player.getInventory().containsAtLeast(new ItemStack(currency), amount)) {\n            player.sendMessage(Component.text(\n                    \"You need \" + amount + \" \" + currency.name().toLowerCase() + \"!\",\n                    NamedTextColor.RED));\n            return false;\n        }\n        HashMap<Integer, ItemStack> notRemoved =\n                player.getInventory().removeItem(new ItemStack(currency, amount));\n        return notRemoved.isEmpty();\n    }\n}"
+  },
+  {
+   "id": "items-inv-give-overflow",
+   "category": "items-inv",
+   "title": "Give items safely: drop the leftovers at the player's feet when the inventory is full",
+   "tags": [
+    "give item",
+    "full inventory",
+    "addItem leftover",
+    "overflow drop",
+    "dar item",
+    "inventario lleno",
+    "items sobrantes",
+    "soltar sobrante",
+    "entregar item"
+   ],
+   "notes": "CLASSIC MISTAKE: calling addItem and ignoring its return value — addItem returns a HashMap<Integer, ItemStack> of everything that did NOT fit, and if you ignore it those items silently vanish (players report 'lost my kit'). Drop the leftovers with dropItemNaturally at the player's location so nothing is lost. addItem splits amounts over maxStackSize across free slots automatically. Must run on the main thread (inventory + world access). setItem(slot, stack) by contrast overwrites whatever is in that slot with no leftover semantics.",
+   "code": "package com.example.items;\n\nimport java.util.HashMap;\n\nimport org.bukkit.entity.Player;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class ItemGiver {\n\n    /** Gives items to the player; anything that does not fit drops at their feet. */\n    public static void give(Player player, ItemStack... items) {\n        HashMap<Integer, ItemStack> leftover = player.getInventory().addItem(items);\n        for (ItemStack rest : leftover.values()) {\n            player.getWorld().dropItemNaturally(player.getLocation(), rest);\n        }\n    }\n}"
+  },
+  {
+   "id": "items-inv-drop-world",
+   "category": "items-inv",
+   "title": "Drop an item in the world with pickup delay, velocity and glow (Consumer pre-spawn config)",
+   "tags": [
+    "drop item",
+    "dropItemNaturally",
+    "item entity",
+    "pickup delay",
+    "spawn item",
+    "soltar item",
+    "tirar item al suelo",
+    "entidad de item",
+    "retraso de recogida",
+    "aparecer item"
+   ],
+   "notes": "World.dropItemNaturally(Location, ItemStack, Consumer<? super Item>) runs the consumer BEFORE the entity spawns — use it so pickup delay / velocity / glowing apply from tick zero (configuring after the plain overload returns also works but can flicker for one tick). dropItem spawns exactly at the location with zero spread; dropItemNaturally adds a small random offset and toss velocity like a mob drop. Pickup delay is in TICKS (20 = 1 second); Item.setUnlimitedLifetime(true) on Paper prevents the 5-minute despawn. CLASSIC MISTAKE: dropping items from an async task — any world access off the main thread throws IllegalStateException on Paper; wrap in getScheduler().runTask(plugin, ...) if you computed something async.",
+   "code": "package com.example.items;\n\nimport org.bukkit.Location;\nimport org.bukkit.entity.Item;\nimport org.bukkit.entity.Player;\nimport org.bukkit.inventory.ItemStack;\nimport org.bukkit.util.Vector;\n\npublic final class RewardDrops {\n\n    public static Item dropReward(Player player, ItemStack stack) {\n        Location loc = player.getLocation().add(0, 1, 0);\n        return player.getWorld().dropItemNaturally(loc, stack, item -> {\n            item.setPickupDelay(40); // ticks: 2 seconds before anyone can pick it up\n            item.setVelocity(new Vector(0, 0.3, 0));\n            item.setGlowing(true);\n        });\n    }\n}"
+  },
+  {
+   "id": "items-inv-shaped-recipe",
+   "category": "items-inv",
+   "title": "Register a custom shaped crafting recipe (ShapedRecipe + NamespacedKey)",
+   "tags": [
+    "custom recipe",
+    "shaped recipe",
+    "crafting recipe",
+    "namespacedkey",
+    "recipe book",
+    "receta personalizada",
+    "crafteo personalizado",
+    "receta de crafteo",
+    "mesa de crafteo",
+    "registrar receta"
+   ],
+   "notes": "Register in onEnable. NamespacedKey must be lowercase [a-z0-9_-] or the constructor throws. Every non-space character used in shape() MUST get a setIngredient or addRecipe throws; a space is an empty cell; all rows must be the same length (1-3 chars, 1-3 rows). CLASSIC MISTAKE: on /reload, addRecipe with an already-registered key throws IllegalStateException — remove it in onDisable (Bukkit.removeRecipe(key)) or guard with Bukkit.getRecipe(key) == null. Players who joined before registration may not SEE the recipe in the recipe book until player.discoverRecipe(key) (the recipe still crafts either way). For an ingredient that must match custom meta (not just Material), use recipe.setIngredient('X', new RecipeChoice.ExactChoice(customStack)). The result ItemStack keeps its Component display name in the crafted output.",
+   "code": "package com.example.recipes;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport net.kyori.adventure.text.format.TextDecoration;\nimport org.bukkit.Bukkit;\nimport org.bukkit.Material;\nimport org.bukkit.NamespacedKey;\nimport org.bukkit.inventory.ItemStack;\nimport org.bukkit.inventory.ShapedRecipe;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class RecipePlugin extends JavaPlugin {\n\n    @Override\n    public void onEnable() {\n        ItemStack result = new ItemStack(Material.NETHERITE_SWORD);\n        result.editMeta(meta -> meta.displayName(\n                Component.text(\"Blade of the End\", NamedTextColor.LIGHT_PURPLE)\n                        .decoration(TextDecoration.ITALIC, false)));\n\n        NamespacedKey key = new NamespacedKey(this, \"blade_of_the_end\");\n        ShapedRecipe recipe = new ShapedRecipe(key, result);\n        recipe.shape(\" E \", \" E \", \" S \");\n        recipe.setIngredient('E', Material.ECHO_SHARD);\n        recipe.setIngredient('S', Material.STICK);\n        Bukkit.addRecipe(recipe);\n    }\n\n    @Override\n    public void onDisable() {\n        Bukkit.removeRecipe(new NamespacedKey(this, \"blade_of_the_end\"));\n    }\n}"
+  },
+  {
+   "id": "wp-spawn-command-config",
+   "category": "world-players",
+   "title": "/setspawn + /spawn commands with the location persisted in config.yml (async, cross-world safe teleport)",
+   "tags": [
+    "spawn command",
+    "setspawn",
+    "teleport",
+    "save location config",
+    "comando spawn",
+    "guardar posicion",
+    "teletransportar",
+    "config.yml",
+    "teleportAsync"
+   ],
+   "notes": "BOTH commands MUST exist in plugin.yml or getCommand() returns null (NPE on setExecutor):\ncommands:\n  spawn:\n    description: Teleport to spawn\n  setspawn:\n    description: Set spawn\nAlso set api-version: \"1.21\" at top level. Location implements ConfigurationSerializable, so getConfig().set(\"spawn\", location) + getConfig().getLocation(\"spawn\") round-trips it (including world name, yaw, pitch) — do NOT hand-serialize x/y/z unless you want human-editable config. getLocation() returns null if the key is missing AND its getWorld() is null if that world isn't loaded — check both. Prefer Paper's teleportAsync() over teleport(): it loads the destination chunk off the main thread first (no lag spike, works across worlds); call it FROM the main thread, the future completes on the main thread. Classic mistakes: forgetting saveConfig() (change lost on restart), and legacy ChatColor strings instead of Adventure Components.",
+   "code": "package com.example.spawn;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Location;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class SpawnPlugin extends JavaPlugin {\n\n    @Override\n    public void onEnable() {\n        getCommand(\"setspawn\").setExecutor((sender, command, label, args) -> {\n            if (!(sender instanceof Player player)) {\n                sender.sendMessage(Component.text(\"Players only.\", NamedTextColor.RED));\n                return true;\n            }\n            getConfig().set(\"spawn\", player.getLocation()); // Location is ConfigurationSerializable\n            saveConfig();\n            player.sendMessage(Component.text(\"Spawn point saved.\", NamedTextColor.GREEN));\n            return true;\n        });\n        getCommand(\"spawn\").setExecutor((sender, command, label, args) -> {\n            if (!(sender instanceof Player player)) {\n                sender.sendMessage(Component.text(\"Players only.\", NamedTextColor.RED));\n                return true;\n            }\n            Location spawn = getConfig().getLocation(\"spawn\");\n            if (spawn == null || spawn.getWorld() == null) {\n                player.sendMessage(Component.text(\"Spawn not set. Use /setspawn first.\", NamedTextColor.RED));\n                return true;\n            }\n            // Paper: loads the target chunk async, then teleports — safe across worlds.\n            player.teleportAsync(spawn).thenAccept(success -> player.sendMessage(success\n                    ? Component.text(\"Teleported to spawn.\", NamedTextColor.GREEN)\n                    : Component.text(\"Teleport failed.\", NamedTextColor.RED)));\n            return true;\n        });\n    }\n}"
+  },
+  {
+   "id": "wp-cross-world-teleport",
+   "category": "world-players",
+   "title": "Teleport a player to another world (nether/end) by world name",
+   "tags": [
+    "cross-world teleport",
+    "world teleport",
+    "nether",
+    "end",
+    "teletransporte entre mundos",
+    "cambiar de mundo",
+    "viajar al nether",
+    "getWorld",
+    "teleportAsync"
+   ],
+   "notes": "Bukkit.getWorld(name) returns null when the name is wrong or the world isn't loaded — ALWAYS null-check before building a Location, or you get 'World cannot be null'. Default world folder names are \"world\", \"world_nether\", \"world_the_end\" (they change if level-name in server.properties changes — enumerate with Bukkit.getWorlds() when unsure). Use teleportAsync (Paper) so the destination chunk is loaded off-thread; plain teleport() sync-loads the chunk and can lag the server. teleportAsync returns CompletableFuture<Boolean> — false means the teleport was cancelled (e.g. by a plugin event). Never call teleport/teleportAsync from an async task; schedule back to the main thread first.",
+   "code": "package com.example.tp;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.Location;\nimport org.bukkit.World;\nimport org.bukkit.entity.Player;\n\npublic final class WorldTeleport {\n\n    /** Sends the player to the spawn of another world, e.g. \"world_nether\" or \"world_the_end\". */\n    public static void toWorld(Player player, String worldName) {\n        World target = Bukkit.getWorld(worldName); // null if not loaded or misspelled\n        if (target == null) {\n            player.sendMessage(Component.text(\"World not found: \" + worldName, NamedTextColor.RED));\n            return;\n        }\n        Location destination = target.getSpawnLocation();\n        player.teleportAsync(destination).thenAccept(success -> {\n            if (success) {\n                player.sendMessage(Component.text(\"Welcome to \" + worldName, NamedTextColor.GREEN));\n            } else {\n                player.sendMessage(Component.text(\"Teleport was cancelled.\", NamedTextColor.RED));\n            }\n        });\n    }\n}"
+  },
+  {
+   "id": "wp-potion-effects",
+   "category": "world-players",
+   "title": "Apply, stack and remove potion effects on a player (timed and infinite)",
+   "tags": [
+    "potion effect",
+    "speed",
+    "night vision",
+    "buffs",
+    "efectos de pocion",
+    "pocion",
+    "velocidad",
+    "vision nocturna",
+    "PotionEffectType",
+    "amplifier"
+   ],
+   "notes": "Duration is in TICKS (20 = 1 second), a classic bug is passing seconds. Amplifier is 0-based: 0 = level I, 1 = level II. Use PotionEffect.INFINITE_DURATION (-1) for permanent effects — do NOT use Integer.MAX_VALUE (shows an ugly timer). 1.20.5+ renamed many constants to vanilla names: SLOW→SLOWNESS, JUMP→JUMP_BOOST, INCREASE_DAMAGE→STRENGTH, DAMAGE_RESISTANCE→RESISTANCE, FAST_DIGGING→HASTE, CONFUSION→NAUSEA — old names DO NOT compile on 1.21. Re-adding an effect of the same type replaces it if the new one is stronger/longer. The 6-arg constructor is (type, duration, amplifier, ambient, particles, icon) — particles=false hides swirls. addPotionEffect must run on the main thread.",
+   "code": "package com.example.effects;\n\nimport org.bukkit.entity.Player;\nimport org.bukkit.potion.PotionEffect;\nimport org.bukkit.potion.PotionEffectType;\n\npublic final class Effects {\n\n    /** 30 seconds of Speed II + permanent particle-less Night Vision. */\n    public static void applyBuffs(Player player) {\n        // duration is in ticks: 30 s * 20 ticks; amplifier 1 = level II\n        player.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 30 * 20, 1));\n        // (type, duration, amplifier, ambient, particles, icon)\n        player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION,\n                PotionEffect.INFINITE_DURATION, 0, false, false, true));\n    }\n\n    /** Remove one effect, or everything at once. */\n    public static void clearBuffs(Player player) {\n        player.removePotionEffect(PotionEffectType.SPEED);\n        for (PotionEffect active : player.getActivePotionEffects()) {\n            player.removePotionEffect(active.getType());\n        }\n    }\n}"
+  },
+  {
+   "id": "wp-scoreboard-sidebar",
+   "category": "world-players",
+   "title": "Per-player sidebar scoreboard that updates every second",
+   "tags": [
+    "scoreboard",
+    "sidebar",
+    "objective",
+    "per-player scoreboard",
+    "tabla lateral",
+    "marcador",
+    "puntuacion",
+    "actualizar scoreboard",
+    "Criteria.DUMMY",
+    "DisplaySlot"
+   ],
+   "notes": "Use getScoreboardManager().getNewScoreboard() per player — writing lines to getMainScoreboard() shows the SAME board to everyone and persists into world data. The only non-deprecated register overload on 1.21 is registerNewObjective(String, Criteria, Component) — the (String, String) and String-displayName ones are deprecated. registerNewObjective throws IllegalArgumentException if the name is already registered on that Scoreboard, hence the cache + computeIfAbsent. Lines are plain-String entries; each entry must be UNIQUE on the board (two lines with identical text collapse into one — pad with invisible chars or make text differ). Score value only controls ordering (higher = nearer the top). resetScores() before rewriting avoids stale lines. Paper 1.20.4+: obj.numberFormat(io.papermc.paper.scoreboard.numbers.NumberFormat.blank()) hides the red numbers on the right. Scoreboard API is main-thread only — never update from an async task.",
+   "code": "package com.example.board;\n\nimport java.util.HashMap;\nimport java.util.Map;\nimport java.util.UUID;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\nimport org.bukkit.scoreboard.Criteria;\nimport org.bukkit.scoreboard.DisplaySlot;\nimport org.bukkit.scoreboard.Objective;\nimport org.bukkit.scoreboard.Scoreboard;\n\npublic final class SidebarPlugin extends JavaPlugin {\n\n    private final Map<UUID, Scoreboard> boards = new HashMap<>();\n\n    @Override\n    public void onEnable() {\n        Bukkit.getScheduler().runTaskTimer(this, () -> {\n            for (Player player : Bukkit.getOnlinePlayers()) {\n                updateSidebar(player);\n            }\n        }, 0L, 20L); // every 20 ticks = 1 second\n    }\n\n    private void updateSidebar(Player player) {\n        Scoreboard board = boards.computeIfAbsent(player.getUniqueId(), id -> {\n            Scoreboard sb = Bukkit.getScoreboardManager().getNewScoreboard();\n            Objective obj = sb.registerNewObjective(\"sidebar\", Criteria.DUMMY,\n                    Component.text(\"My Server\", NamedTextColor.GOLD));\n            obj.setDisplaySlot(DisplaySlot.SIDEBAR);\n            return sb;\n        });\n        Objective obj = board.getObjective(\"sidebar\");\n        for (String entry : board.getEntries()) { // wipe old lines, then rewrite\n            board.resetScores(entry);\n        }\n        obj.getScore(\"Online: \" + Bukkit.getOnlinePlayers().size()).setScore(2);\n        obj.getScore(\"Health: \" + (int) player.getHealth()).setScore(1);\n        player.setScoreboard(board);\n    }\n\n    @Override\n    public void onDisable() {\n        boards.clear();\n    }\n}"
+  },
+  {
+   "id": "wp-bossbar-countdown",
+   "category": "world-players",
+   "title": "Adventure BossBar countdown shown to a player, updating name and progress",
+   "tags": [
+    "bossbar",
+    "boss bar",
+    "countdown",
+    "progress bar",
+    "barra de jefe",
+    "barra superior",
+    "cuenta atras",
+    "temporizador",
+    "Adventure BossBar"
+   ],
+   "notes": "On Paper use net.kyori.adventure.bossbar.BossBar with player.showBossBar/hideBossBar — NOT the legacy org.bukkit.boss.BossBar / Bukkit.createBossBar (String-based, deprecated path). progress() MUST be within 0.0–1.0 or Adventure throws IllegalArgumentException — clamp computed values. Mutating the bar (name/progress/color) updates it live for every viewer; one bar instance can be shown to many players (great for global events). Always hideBossBar on PlayerQuitEvent and in onDisable, otherwise the bar sticks around after /reload. BukkitRunnable.cancel() inside run() stops the timer; runTaskTimer(plugin, delay, period) is in ticks.",
+   "code": "package com.example.bar;\n\nimport net.kyori.adventure.bossbar.BossBar;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\nimport org.bukkit.scheduler.BukkitRunnable;\n\npublic final class BossBarCountdown {\n\n    /** Shows a 10-second countdown boss bar, then removes it. */\n    public static void start(JavaPlugin plugin, Player player) {\n        BossBar bar = BossBar.bossBar(\n                Component.text(\"Event starts in 10s\", NamedTextColor.YELLOW),\n                1.0f, BossBar.Color.RED, BossBar.Overlay.NOTCHED_10);\n        player.showBossBar(bar);\n\n        new BukkitRunnable() {\n            private int secondsLeft = 10;\n\n            @Override\n            public void run() {\n                secondsLeft--;\n                if (secondsLeft <= 0 || !player.isOnline()) {\n                    player.hideBossBar(bar);\n                    cancel();\n                    return;\n                }\n                bar.progress(secondsLeft / 10.0f); // must stay within 0.0-1.0\n                bar.name(Component.text(\"Event starts in \" + secondsLeft + \"s\", NamedTextColor.YELLOW));\n            }\n        }.runTaskTimer(plugin, 20L, 20L);\n    }\n}"
+  },
+  {
+   "id": "wp-spawn-mob-attributes",
+   "category": "world-players",
+   "title": "Spawn a custom mob with modified attributes, name and equipment (boss zombie)",
+   "tags": [
+    "spawn mob",
+    "custom mob",
+    "attributes",
+    "max health",
+    "boss mob",
+    "invocar mob",
+    "aparecer zombi",
+    "atributos",
+    "vida maxima",
+    "equipamiento"
+   ],
+   "notes": "Use the Consumer overload of spawn(): it configures the entity BEFORE it is added to the world (so spawn events and other plugins already see the final mob). Attribute constant names changed in 1.21.2+: it is Attribute.MAX_HEALTH / MOVEMENT_SPEED / ATTACK_DAMAGE — the old GENERIC_MAX_HEALTH etc. DO NOT compile on 1.21.4 (Attribute is now an interface with constants, not the old enum). Raising MAX_HEALTH does NOT heal the mob — call setHealth() afterwards or it spawns at 20 HP. getAttribute() returns null for attributes the mob type doesn't have. customName(Component) is the Paper/Adventure method (setCustomName(String) is deprecated). setPersistent(true) prevents natural despawning. Spawning must happen on the main thread — never from an async task.",
+   "code": "package com.example.mobs;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Location;\nimport org.bukkit.Material;\nimport org.bukkit.attribute.Attribute;\nimport org.bukkit.entity.Zombie;\nimport org.bukkit.inventory.ItemStack;\n\npublic final class MobSpawner {\n\n    /** Spawns a named boss zombie: 40 HP, faster, hits harder, iron sword. */\n    public static Zombie spawnBossZombie(Location location) {\n        return location.getWorld().spawn(location, Zombie.class, zombie -> {\n            // 1.21.2+ names: MAX_HEALTH (GENERIC_MAX_HEALTH no longer compiles)\n            zombie.getAttribute(Attribute.MAX_HEALTH).setBaseValue(40.0);\n            zombie.setHealth(40.0); // raising max health does NOT heal automatically\n            zombie.getAttribute(Attribute.MOVEMENT_SPEED).setBaseValue(0.35);\n            zombie.getAttribute(Attribute.ATTACK_DAMAGE).setBaseValue(8.0);\n            zombie.customName(Component.text(\"Boss Zombie\", NamedTextColor.DARK_RED));\n            zombie.setCustomNameVisible(true);\n            zombie.getEquipment().setItemInMainHand(new ItemStack(Material.IRON_SWORD));\n            zombie.setPersistent(true); // never despawns naturally\n        });\n    }\n}"
+  },
+  {
+   "id": "wp-sound-particles",
+   "category": "world-players",
+   "title": "Play a sound and spawn particles (flame + colored dust) at a location",
+   "tags": [
+    "sound",
+    "particles",
+    "playSound",
+    "spawnParticle",
+    "sonido",
+    "particulas",
+    "efectos visuales",
+    "dust color",
+    "reproducir sonido"
+   ],
+   "notes": "world.playSound broadcasts to everyone in hearing range; use player.playSound(...) with the same arguments to target one player only. Pitch is clamped to 0.5–2.0. Particle names were renamed in 1.20.5 to vanilla ids: REDSTONE→DUST, VILLAGER_HAPPY→HAPPY_VILLAGER, EXPLOSION_LARGE→EXPLOSION, SPELL_WITCH→WITCH — old names DO NOT compile on 1.21. Particle.DUST requires a Particle.DustOptions data object as the last argument (size 0.01–4.0), otherwise the server throws at runtime. In spawnParticle the 3 offsets are the random spread (a gaussian radius, NOT an exact offset) and 'extra' is usually particle speed. Sound and Particle became interfaces backed by registries in 1.21.3+ — you can't switch over them like enums anymore, but the constants work the same.",
+   "code": "package com.example.fx;\n\nimport org.bukkit.Color;\nimport org.bukkit.Location;\nimport org.bukkit.Particle;\nimport org.bukkit.Sound;\nimport org.bukkit.World;\n\npublic final class Celebration {\n\n    /** Level-up ding + flame burst + red dust cloud, visible/audible to everyone nearby. */\n    public static void celebrate(Location location) {\n        World world = location.getWorld();\n        world.playSound(location, Sound.ENTITY_PLAYER_LEVELUP, 1.0f, 1.2f); // volume, pitch\n        // (particle, location, count, offsetX, offsetY, offsetZ, extra/speed)\n        world.spawnParticle(Particle.FLAME, location, 40, 0.5, 1.0, 0.5, 0.02);\n        // DUST needs a DustOptions data object (color + size) as last argument\n        world.spawnParticle(Particle.DUST, location, 30, 0.5, 1.0, 0.5, 0.0,\n                new Particle.DustOptions(Color.RED, 1.5f));\n    }\n}"
+  },
+  {
+   "id": "wp-time-weather",
+   "category": "world-players",
+   "title": "Set world time (day/night) and weather (clear/rain/thunder) with durations",
+   "tags": [
+    "set time",
+    "weather",
+    "day night",
+    "rain",
+    "thunder",
+    "poner de dia",
+    "clima",
+    "lluvia",
+    "tormenta",
+    "tiempo del mundo"
+   ],
+   "notes": "Time and weather are PER WORLD — setting them on \"world\" does not touch the nether/end or other loaded worlds. setTime uses ticks 0–24000: 0=sunrise, 1000=day, 6000=noon, 13000=night, 18000=midnight (it keeps the day counter; setFullTime overwrites the absolute tick count and can break daylight-sensitive logic). To force clear skies you must set BOTH setStorm(false) and setThundering(false); then setClearWeatherDuration(ticks) locks it so the natural weather cycle doesn't rain again immediately. Durations are in ticks (20/second). If gamerule doDaylightCycle is false the time freezes at whatever you set. All of these must run on the main thread.",
+   "code": "package com.example.env;\n\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.World;\nimport org.bukkit.entity.Player;\n\npublic final class TimeWeather {\n\n    /** Day + clear skies in the player's current world only. */\n    public static void sunnyDay(Player player) {\n        World world = player.getWorld();\n        world.setTime(1000L); // 0=sunrise, 1000=day, 6000=noon, 13000=night, 18000=midnight\n        world.setStorm(false);\n        world.setThundering(false);\n        world.setClearWeatherDuration(20 * 60 * 10); // keep it clear for 10 minutes (ticks)\n        player.sendMessage(Component.text(\"The sun is out!\", NamedTextColor.YELLOW));\n    }\n\n    /** 5-minute thunderstorm. */\n    public static void thunderstorm(World world) {\n        world.setStorm(true);\n        world.setThundering(true);\n        world.setWeatherDuration(20 * 60 * 5);  // ticks of rain\n        world.setThunderDuration(20 * 60 * 5);  // ticks of thunder\n    }\n}"
+  },
+  {
+   "id": "wp-economy-yml-pay",
+   "category": "world-players",
+   "title": "Simple economy: per-player balance stored in balances.yml + /pay command",
+   "tags": [
+    "economy",
+    "balance",
+    "pay command",
+    "money",
+    "yml storage",
+    "economia",
+    "dinero",
+    "pagar",
+    "saldo",
+    "guardar en yml"
+   ],
+   "notes": "plugin.yml MUST declare the command or getCommand(\"pay\") returns null:\ncommands:\n  pay:\n    description: Send money to a player\n    usage: /pay <player> <amount>\nKey balances by UUID, NEVER by player name (names change; name keys silently duplicate accounts). YamlConfiguration.loadConfiguration never returns null — a missing file just yields an empty config, so getDouble's default doubles as the starting balance. getConfig() is only for config.yml; a separate data file needs its own File + save(file), and mkdirs() on the data folder first (it doesn't exist on first run). Validate amount > 0 or players /pay themselves negative amounts to steal. Bukkit.getPlayerExact avoids the prefix-matching surprises of getPlayer. Saving on every transaction is fine for small servers; for busy ones batch saves on a timer or async (file IO only — never touch Bukkit API async). Always save in onDisable.",
+   "code": "package com.example.eco;\n\nimport java.io.File;\nimport java.io.IOException;\nimport java.util.UUID;\nimport net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.format.NamedTextColor;\nimport org.bukkit.Bukkit;\nimport org.bukkit.configuration.file.YamlConfiguration;\nimport org.bukkit.entity.Player;\nimport org.bukkit.plugin.java.JavaPlugin;\n\npublic final class EcoPlugin extends JavaPlugin {\n\n    private File balancesFile;\n    private YamlConfiguration balances;\n\n    @Override\n    public void onEnable() {\n        balancesFile = new File(getDataFolder(), \"balances.yml\");\n        balancesFile.getParentFile().mkdirs();\n        balances = YamlConfiguration.loadConfiguration(balancesFile); // empty config if file missing\n\n        getCommand(\"pay\").setExecutor((sender, command, label, args) -> {\n            if (!(sender instanceof Player from)) {\n                sender.sendMessage(Component.text(\"Players only.\", NamedTextColor.RED));\n                return true;\n            }\n            if (args.length != 2) {\n                from.sendMessage(Component.text(\"Usage: /pay <player> <amount>\", NamedTextColor.RED));\n                return true;\n            }\n            Player to = Bukkit.getPlayerExact(args[0]);\n            if (to == null) {\n                from.sendMessage(Component.text(\"That player is not online.\", NamedTextColor.RED));\n                return true;\n            }\n            double amount;\n            try {\n                amount = Double.parseDouble(args[1]);\n            } catch (NumberFormatException e) {\n                from.sendMessage(Component.text(\"Amount must be a number.\", NamedTextColor.RED));\n                return true;\n            }\n            if (amount <= 0 || getBalance(from.getUniqueId()) < amount) {\n                from.sendMessage(Component.text(\"Insufficient funds.\", NamedTextColor.RED));\n                return true;\n            }\n            setBalance(from.getUniqueId(), getBalance(from.getUniqueId()) - amount);\n            setBalance(to.getUniqueId(), getBalance(to.getUniqueId()) + amount);\n            from.sendMessage(Component.text(\"Sent $\" + amount + \" to \" + to.getName(), NamedTextColor.GREEN));\n            to.sendMessage(Component.text(\"Received $\" + amount + \" from \" + from.getName(), NamedTextColor.GREEN));\n            return true;\n        });\n    }\n\n    public double getBalance(UUID id) {\n        return balances.getDouble(id.toString(), 100.0); // 100 = starting balance\n    }\n\n    public void setBalance(UUID id, double value) {\n        balances.set(id.toString(), value);\n        save();\n    }\n\n    private void save() {\n        try {\n            balances.save(balancesFile);\n        } catch (IOException e) {\n            getSLF4JLogger().error(\"Could not save balances.yml\", e);\n        }\n    }\n\n    @Override\n    public void onDisable() {\n        save();\n    }\n}"
+  },
+  {
+   "id": "items-inv-custom-item-pdc",
+   "category": "items-inv",
+   "title": "Identify a custom item reliably (PersistentDataContainer tag, not display name)",
+   "tags": [
+    "custom item",
+    "identify item",
+    "item especial",
+    "detectar item",
+    "PersistentDataContainer",
+    "PDC",
+    "NamespacedKey",
+    "espada custom",
+    "custom sword",
+    "right click ability",
+    "habilidad",
+    "unique item",
+    "item unico"
+   ],
+   "notes": "NEVER identify a custom item by comparing its display name — Components have no getString()/getText(); name comparisons break with italics/color and players can rename items at an anvil. The robust pattern: stamp a PersistentDataContainer tag when creating the item, then check the tag in listeners. NamespacedKey should be created once with the plugin instance. Adventure Components do NOT have .getString(); if you truly need plain text use PlainTextComponentSerializer (see events-component-plaintext).",
+   "code": "// when creating the item (plugin = your JavaPlugin instance)\nNamespacedKey key = new NamespacedKey(plugin, \"dragonbane\");\nItemStack sword = new ItemStack(Material.NETHERITE_SWORD);\nItemMeta meta = sword.getItemMeta();\nmeta.displayName(Component.text(\"Dragonbane\", NamedTextColor.GOLD)\n        .decoration(TextDecoration.ITALIC, false));\nmeta.getPersistentDataContainer().set(key, PersistentDataType.BYTE, (byte) 1);\nsword.setItemMeta(meta);\n\n// when checking in a listener\nItemStack item = event.getItem();\nif (item == null || !item.hasItemMeta()) return;\nboolean isDragonbane = item.getItemMeta().getPersistentDataContainer()\n        .has(new NamespacedKey(plugin, \"dragonbane\"), PersistentDataType.BYTE);\nif (!isDragonbane) return;\n\n// imports needed:\n// org.bukkit.NamespacedKey, org.bukkit.persistence.PersistentDataType,\n// org.bukkit.inventory.meta.ItemMeta, net.kyori.adventure.text.Component,\n// net.kyori.adventure.text.format.NamedTextColor, net.kyori.adventure.text.format.TextDecoration"
+  },
+  {
+   "id": "events-component-plaintext",
+   "category": "events",
+   "title": "Convert an Adventure Component to plain text (PlainTextComponentSerializer)",
+   "tags": [
+    "component to string",
+    "plain text",
+    "texto plano",
+    "getString",
+    "serializer",
+    "comparar nombre",
+    "compare display name",
+    "leer componente",
+    "adventure serializer"
+   ],
+   "notes": "Adventure Components have NO getString()/getText() method — inventing one is a classic compile error. Use PlainTextComponentSerializer.plainText().serialize(component). It ships with Paper (no extra dependency). For chat input you usually want this to compare what a player typed. Prefer PDC tags over name comparison for identifying custom items (see items-inv-custom-item-pdc).",
+   "code": "import net.kyori.adventure.text.Component;\nimport net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;\n\nComponent name = item.getItemMeta().displayName();\nString plain = name == null ? \"\" : PlainTextComponentSerializer.plainText().serialize(name);\nif (plain.equals(\"Dragonbane\")) {\n    // matched\n}"
+  }
+ ]
+}
