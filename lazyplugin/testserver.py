@@ -48,15 +48,26 @@ def resolve_version(version: str) -> str:
     raise RuntimeError(f"Paper has no version {version!r}. Known families: {known}")
 
 
-def latest_build(version: str) -> tuple[int, str, str]:
-    """(build number, jar filename, download url) for the newest build."""
+def latest_build(version: str) -> tuple[int, str, str, str | None]:
+    """(build number, jar filename, download url, sha256) for the newest build."""
     builds = _get(f"{API}/versions/{version}/builds")
     if not builds:
         raise RuntimeError(f"no Paper builds published for {version}")
     stable = next((b for b in builds if b.get("channel") == "STABLE"), builds[0])
     dl = stable["downloads"]
     entry = dl.get("server:default") or next(iter(dl.values()))
-    return stable["id"], entry["name"], entry["url"]
+    digest = (entry.get("checksums") or {}).get("sha256")
+    return stable["id"], entry["name"], entry["url"], digest
+
+
+def _sha256(path: str) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def java_version() -> int | None:
@@ -99,18 +110,26 @@ def prepare(server_dir: str, version: str = "1.21", plugin_jar: str | None = Non
 
     os.makedirs(server_dir, exist_ok=True)
     resolved = resolve_version(version)
-    build, name, url = latest_build(resolved)
+    build, name, url, digest = latest_build(resolved)
     emit(f"Paper {resolved} build {build}")
 
+    # We are about to execute this jar, so a published checksum gets checked,
+    # on a cached copy as well as a fresh download. A mismatch deletes the file
+    # rather than running it.
     jar = os.path.join(server_dir, name)
-    if os.path.exists(jar):
+    if os.path.exists(jar) and (digest is None or _sha256(jar) == digest):
         emit(f"already downloaded: {name}")
     else:
         emit(f"downloading {name} ...")
         req = urllib.request.Request(url, headers=UA)
         with urllib.request.urlopen(req, timeout=180) as r, open(jar, "wb") as f:
             shutil.copyfileobj(r, f)
-        emit(f"downloaded {os.path.getsize(jar) // (1024 * 1024)} MB")
+        if digest and _sha256(jar) != digest:
+            os.remove(jar)
+            raise RuntimeError(
+                f"{name} does not match the checksum PaperMC published. "
+                f"Nothing was run and the file has been deleted.")
+        emit(f"downloaded {os.path.getsize(jar) // (1024 * 1024)} MB, checksum ok")
 
     with open(os.path.join(server_dir, "eula.txt"), "w", encoding="utf-8") as f:
         f.write(f"# accepted by the user via lazyplugin ({EULA_URL})\neula=true\n")
@@ -143,7 +162,7 @@ def prepare(server_dir: str, version: str = "1.21", plugin_jar: str | None = Non
 
 
 def start(server_dir: str, server_jar: str, memory: str = "2G",
-          on_line=None, timeout_s: int = 240):
+          on_line=None):
     """Boot the server, streaming console lines to on_line.
 
     Returns the Popen so a caller can keep it running (the web interface does)

@@ -93,12 +93,30 @@ def _run_server(test: TestRun, jar: str, version: str, server_dir: str) -> None:
         test.status = "error"
 
 
-def create_app():
+LOOPBACK_NAMES = {"localhost", "127.0.0.1", "::1", "[::1]", ""}
+
+
+def create_app(allowed_hosts: set[str] | None = None):
     from fastapi import FastAPI, HTTPException
-    from fastapi.responses import FileResponse, HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 
     app = FastAPI(title="LazyPlugin", docs_url=None, redoc_url=None)
     here = os.path.dirname(__file__)
+    allowed = set(allowed_hosts or LOOPBACK_NAMES)
+
+    @app.middleware("http")
+    async def only_known_hosts(request, call_next):
+        """Reject requests that arrive under an unexpected hostname.
+
+        Without this, an attacker domain whose DNS points at 127.0.0.1 looks
+        same-origin to the browser, so any page you happen to visit could drive
+        this server: spend your API credits, or start a process on your machine.
+        Checking the Host header costs nothing and closes it.
+        """
+        host = (request.headers.get("host") or "").rsplit(":", 1)[0].strip("[]")
+        if host not in allowed:
+            return JSONResponse({"detail": f"host {host!r} not allowed"}, status_code=403)
+        return await call_next(request)
 
     @app.get("/", response_class=HTMLResponse)
     def index():
@@ -220,5 +238,7 @@ def serve(host: str = "127.0.0.1", port: int = 8321, open_browser: bool = True) 
     if open_browser:
         import webbrowser
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
-    uvicorn.run(create_app(), host=host, port=port, log_level="warning")
+    # Whatever you bound to is legitimate; everything else is not.
+    uvicorn.run(create_app(LOOPBACK_NAMES | {host}), host=host, port=port,
+                log_level="warning")
     return 0

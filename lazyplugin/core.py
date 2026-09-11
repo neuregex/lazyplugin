@@ -94,6 +94,12 @@ def _parse_files(text: str) -> dict[str, str]:
         path = path.strip().replace("\\", "/").lstrip("/")
         if ".." in path or path.startswith(("~", "pom.xml")):
             continue                                    # never escape the project / touch our pom
+        # A drive letter survives the lstrip above, and once joined it is
+        # drive-relative rather than nested: os.path.join("proj", "C:", "x")
+        # is "C:x", outside the project entirely. _write_project re-checks
+        # containment, so this is the first of two gates.
+        if re.match(r"^[A-Za-z]:", path):
+            continue
         # yml files must live in resources or Maven won't pack them into the jar
         if path.endswith((".yml", ".yaml")) and not path.startswith("src/"):
             path = "src/main/resources/" + os.path.basename(path)
@@ -111,8 +117,13 @@ def _write_project(project_dir: str, artifact: str, mc_version: str, files: dict
     pom = POM_XML.format(artifact=artifact, paper_version=PAPER_API[mc_version])
     with open(os.path.join(project_dir, "pom.xml"), "w", encoding="utf-8") as f:
         f.write(pom)
+    # These paths come from a language model, so containment is enforced by
+    # resolving the result, not by trusting the pattern checks upstream.
+    root = os.path.abspath(project_dir)
     for rel, content in files.items():
-        dest = os.path.join(project_dir, *rel.split("/"))
+        dest = os.path.abspath(os.path.join(root, *rel.split("/")))
+        if os.path.commonpath([root, dest]) != root:
+            continue                                    # refuse to write outside the project
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, "w", encoding="utf-8") as f:
             f.write(content)
@@ -267,8 +278,13 @@ def forge(request: str, mc_version: str = "1.21", out_dir: str | None = None,
 
 def _merge_files(project_dir: str, files: dict[str, str]) -> None:
     """Write ONLY the returned files over the existing project (never wipes)."""
+    # These paths come from a language model, so containment is enforced by
+    # resolving the result, not by trusting the pattern checks upstream.
+    root = os.path.abspath(project_dir)
     for rel, content in files.items():
-        dest = os.path.join(project_dir, *rel.split("/"))
+        dest = os.path.abspath(os.path.join(root, *rel.split("/")))
+        if os.path.commonpath([root, dest]) != root:
+            continue                                    # refuse to write outside the project
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         with open(dest, "w", encoding="utf-8") as f:
             f.write(content)
