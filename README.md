@@ -145,6 +145,36 @@ Useful flags: `--version 1.21`, `--out DIR`, `--fix-rounds 3`, `--key`, `--base-
    step is what separates a jar from a guess.
 5. **Report.** Tokens, cost and duration for every run.
 
+## A note on local services and your browser
+
+`lazyplugin serve` binds to `127.0.0.1` and checks the `Host` header on every
+request. Both are deliberate, and the reason is worth knowing if you run any
+local AI tooling.
+
+"Only listening on localhost" is not the same as "only I can reach it". Your
+browser sits on the internet and inside your loopback at the same time, and it
+runs code from every page you visit. In a **DNS rebinding** attack, a domain
+answers with its real address to serve you a page, then re-answers with
+`127.0.0.1` a second later. The browser now believes the attacker page and your
+local service share an origin, so its JavaScript can call that service and, this
+is the important part, *read the replies*. Same-origin means CORS never gets a
+say.
+
+Against LazyPlugin that would mean spending your API credits, reading generated
+source and project paths, or starting a server process. It could not read the
+key itself, which is never returned by any endpoint, but a capability you hold
+is quite enough: the attacker does not need your key if they can borrow the
+process that has it.
+
+Checking `Host` closes it, because the browser always sends the name the user
+typed, and after rebinding that name is the attacker domain rather than
+`localhost`. The check costs nothing.
+
+This matters beyond this tool. Much of the local AI stack listens on a port
+with no authentication at all, **Ollama on 11434 included**. If you run those,
+they are reachable by the same trick, so it is worth knowing which of them
+validate `Host` and which simply assume loopback is private.
+
 ## Adding a provider
 
 Five lines in `lazyplugin/models.py`:
